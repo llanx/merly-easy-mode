@@ -10,7 +10,7 @@
     "easy": "node ./bin/merly-easy.js easy",
     "setup": "node ./bin/merly-easy.js setup",
     "merly": "node ./bin/merly-easy.js",
-    "test": "node ./scripts/cli-smoke.js && node ./scripts/spec-adapter-smoke.js && node ./scripts/spec-report-smoke.js",
+    "test": "node ./scripts/cli-smoke.js && node ./scripts/spec-adapter-smoke.js && node ./scripts/spec-report-smoke.js && node ./scripts/spec-policy-smoke.js",
     "check:public-clean": "node ./scripts/check-public-clean.js",
     "mcp:smoke": "npm --prefix ./mcp-server run mcp:smoke",
     "smoke": "npm run check:public-clean && npm run mcp:smoke"

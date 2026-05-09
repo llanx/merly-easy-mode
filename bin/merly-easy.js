@@ -13,6 +13,11 @@ const {
   resolveSpecReportOutput,
   writeSpecReports,
 } = require("../lib/spec-reports");
+const {
+  evaluateSpecPolicies,
+  parseSpecFailOn,
+  supportedFailOnPolicyList,
+} = require("../lib/spec-policies");
 
 const VERSION = "0.1.0";
 const CLIENTS = new Set(["codex", "claude"]);
@@ -20,6 +25,7 @@ const MERLY_MENTOR_URL = "https://www.merly.ai/mentor";
 const DEFAULT_MERLY_BASE_URL = "http://127.0.0.1:4201";
 const MERLY_UI_KEYS_URL = "http://127.0.0.1:4202/dif-api-keys";
 const AUTH_FLOWS = new Set(["ui", "advanced"]);
+const SUPPORTED_SPEC_EXTENSIONS = new Set([".md", ".markdown", ".feature", ".json", ".schema", ".graphql", ".gql", ".yaml", ".yml"]);
 
 function main(argv) {
   try {
@@ -167,17 +173,19 @@ function runSpecVerify(argv) {
   const options = parseOptions(argv);
   if (options.help) return printSpecVerifyHelp();
 
+  const failOnPolicies = parseFailOnOption(options.failOn);
   const repoRoot = path.resolve(__dirname, "..");
   const extraction = extractSpecFromOptions(options);
   const changeResult = collectChangedFiles(repoRoot, { changedOnly: Boolean(options.changed) });
   const evidenceResult = collectSpecMerlyEvidence({ dryRun: options.dryRun });
   const output = resolveSpecReportOutput(options, repoRoot, extraction.spec_path);
   const skippedChecks = [
+    ...buildUnsupportedSpecFormatChecks(options, extraction),
     ...changeResult.skippedChecks,
     ...evidenceResult.skippedChecks,
     ...buildSpecVerificationSkippedChecks(changeResult.files),
   ];
-  const report = buildSpecVerificationReport({
+  const baseReport = buildSpecVerificationReport({
     extraction,
     changedFiles: changeResult.files,
     merlyEvidence: evidenceResult.merlyEvidence,
@@ -191,10 +199,16 @@ function runSpecVerify(argv) {
       json: output.displayJsonPath,
     },
   });
+  const policyResult = evaluateSpecPolicies(baseReport, failOnPolicies);
+  const report = {
+    ...baseReport,
+    ci_policy: policyResult,
+  };
 
   if (options.json) {
     const payload = options.dryRun ? report : writeSpecReports(report, output).report;
     console.log(JSON.stringify(payload, null, 2));
+    applySpecPolicyExit(policyResult);
     return;
   }
 
@@ -204,11 +218,13 @@ function runSpecVerify(argv) {
   console.log(`Changed files: ${changeResult.files.length}`);
   console.log(`Merly evidence: ${report.summary.merly_status}`);
   console.log(`Skipped checks: ${skippedChecks.length}`);
+  printSpecPolicySummary(policyResult);
 
   if (options.dryRun) {
     console.log("");
     console.log(`Dry run: reports were not written. Planned JSON report: ${output.displayJsonPath}`);
     console.log(`Dry run: planned Markdown report: ${output.displayMarkdownPath}`);
+    applySpecPolicyExit(policyResult);
     return;
   }
 
@@ -216,6 +232,7 @@ function runSpecVerify(argv) {
   console.log("");
   console.log(`Wrote JSON report: ${written.paths.json}`);
   console.log(`Wrote Markdown report: ${written.paths.markdown}`);
+  applySpecPolicyExit(policyResult);
 }
 
 function runSpecReport(argv) {
@@ -366,6 +383,45 @@ function buildSpecVerificationSkippedChecks(changedFiles) {
   ];
 }
 
+function buildUnsupportedSpecFormatChecks(options, extraction) {
+  const specPath = options.spec || options.input || extraction.spec_path || "";
+  const extension = path.extname(specPath).toLowerCase();
+  if (SUPPORTED_SPEC_EXTENSIONS.has(extension)) return [];
+
+  return [
+    {
+      name: "unsupported_spec_format",
+      reason: `Unsupported spec extension "${extension || "(none)"}"; extraction used the ${extraction.adapter?.label || extraction.adapter?.id || "Markdown"} fallback.`,
+    },
+  ];
+}
+
+function parseFailOnOption(value) {
+  try {
+    return parseSpecFailOn(value);
+  } catch (error) {
+    throw new CliError(error.message, 1, `Supported --fail-on policies: ${supportedFailOnPolicyList()}.`);
+  }
+}
+
+function printSpecPolicySummary(policyResult) {
+  if (policyResult.mode === "advisory") {
+    console.log("CI policy: advisory");
+    return;
+  }
+
+  console.log(`CI policy: ${policyResult.status} (${policyResult.fail_on.join(", ")})`);
+  for (const failure of policyResult.failures) {
+    console.log(`Policy failure: ${failure.policy} - ${failure.reason}`);
+  }
+}
+
+function applySpecPolicyExit(policyResult) {
+  if (policyResult.failures.length > 0) {
+    process.exitCode = 1;
+  }
+}
+
 function printSpecPlan(title, options, steps) {
   printPlan({
     title,
@@ -427,6 +483,13 @@ function parseOptions(argv) {
       options.fromEnv = true;
     } else if (arg === "--register-repo") {
       options.registerRepo = true;
+    } else if (arg === "--fail-on") {
+      const next = argv[index + 1];
+      if (!next || next.startsWith("--")) {
+        throw new CliError("--fail-on requires a value.");
+      }
+      options.failOn = options.failOn ? `${options.failOn},${next}` : next;
+      index += 1;
     } else if (arg.startsWith("--")) {
       const key = toCamelCase(arg.slice(2));
       const next = argv[index + 1];
@@ -494,7 +557,7 @@ Notes:
 function printSpecHelp() {
   console.log(`Usage:
   merly-easy spec preflight --spec <file> [--json] [--dry-run]
-  merly-easy spec verify --spec <file> [--changed] [--output-dir <path>] [--json] [--dry-run]
+  merly-easy spec verify --spec <file> [--changed] [--fail-on <policy[,policy]>] [--output-dir <path>] [--json] [--dry-run]
   merly-easy spec report --input <file> [--output <file>] [--json] [--dry-run]`);
 }
 
@@ -503,7 +566,9 @@ function printSpecPreflightHelp() {
 }
 
 function printSpecVerifyHelp() {
-  console.log("Usage: merly-easy spec verify --spec <file> [--changed] [--output-dir <path>] [--output-name <name>] [--json] [--dry-run]");
+  console.log(`Usage: merly-easy spec verify --spec <file> [--changed] [--fail-on <policy[,policy]>] [--output-dir <path>] [--output-name <name>] [--json] [--dry-run]
+
+Supported --fail-on policies: ${supportedFailOnPolicyList()}.`);
 }
 
 function printSpecReportHelp() {

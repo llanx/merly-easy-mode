@@ -38,6 +38,8 @@ assert.equal(report.summary.spec_path, "fixtures/specs/markdown-basic.md");
 assert.equal(report.summary.adapter, "markdown");
 assert.equal(report.summary.requirement_count, 3);
 assert.equal(report.summary.merly_status, "available");
+assert.equal(report.ci_policy.mode, "advisory");
+assert.equal(report.ci_policy.status, "pass");
 assert.equal(Array.isArray(report.changed_files), true);
 assert.equal(report.merly_evidence.checks.length, 2);
 assert.equal(report.outputs.json, ".merly-local/spec-report-smoke/markdown-basic.json");
@@ -49,6 +51,7 @@ assert.match(markdown, /# Merly Spec Verification Report/);
 assert.match(markdown, /## Requirement Items/);
 assert.match(markdown, /## Merly Evidence/);
 assert.match(markdown, /## Skipped Checks/);
+assert.match(markdown, /## CI Policy/);
 
 const rendered = runCli(["spec", "report", "--input", ".merly-local/spec-report-smoke/markdown-basic.json"]);
 assert.equal(rendered.status, 0, rendered.stderr);

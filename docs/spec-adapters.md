@@ -49,6 +49,27 @@ npm run merly -- spec report --input .merly-local/spec-reports/gherkin-basic-spe
 
 `spec verify` is intentionally advisory. It records extracted requirements, changed files when `--changed` is supplied, Merly health/auth evidence when available, and skipped checks for verification work that is not yet automated.
 
+## CI Policy Flags
+
+`spec verify` exits zero by default, even when the report contains advisory gaps. Add `--fail-on` only when a CI job or team workflow wants a strict gate:
+
+```powershell
+npm run merly -- spec verify --spec fixtures/specs/markdown-basic.md --changed --fail-on merly-failure
+```
+
+Supported policies:
+
+- `missing-mappings`: fail when requirement-to-file mapping is missing.
+- `merly-failure`: fail when Merly health/auth evidence contains failed checks.
+- `unresolved-blockers`: fail on failed Merly evidence, unsupported spec fallback, no extracted requirements, or failed changed-file collection.
+- `unsupported-spec`: fail when the input uses an unsupported extension fallback.
+
+Use a comma-separated list to enforce multiple policies:
+
+```powershell
+npm run merly -- spec verify --spec docs/task.md --changed --fail-on merly-failure,unsupported-spec
+```
+
 ## Output Shape
 
 Each extracted item includes:
@@ -87,6 +108,7 @@ The JSON report includes:
 - `changed_files`
 - `merly_evidence`
 - `skipped_checks`
+- `ci_policy`
 - `outputs`
 
 The Markdown report includes the same information in a human-readable format for task handoffs and review.

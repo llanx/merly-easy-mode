@@ -95,6 +95,7 @@ npm run merly -- doctor
 npm run merly -- auth
 npm run merly -- spec preflight --spec fixtures/specs/markdown-basic.md
 npm run merly -- spec verify --spec fixtures/specs/markdown-basic.md --changed
+npm run merly -- spec verify --spec fixtures/specs/markdown-basic.md --changed --fail-on merly-failure
 npm run merly -- spec report --input .merly-local/spec-reports/markdown-basic-spec-report.json
 npm run mcp:smoke
 npm run check:public-clean
