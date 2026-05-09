@@ -169,7 +169,7 @@ const cases = [
   {
     name: "spec verify dry-run",
     args: ["spec", "verify", "--spec", "fixtures/specs/gherkin-basic.feature", "--changed", "--dry-run"],
-    includes: ["Spec Verify (dry run)", "Extract requirements"],
+    includes: ["Spec Verify (dry run)", "Adapter: Gherkin (gherkin)", "Extracted requirements: 5", "Merly evidence: not run"],
   },
   {
     name: "spec report dry-run",

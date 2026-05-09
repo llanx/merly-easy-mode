@@ -93,6 +93,7 @@ npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor
 npm run merly -- auth
+npm run merly -- spec preflight --spec fixtures/specs/markdown-basic.md
 npm run mcp:smoke
 npm run check:public-clean
 ```

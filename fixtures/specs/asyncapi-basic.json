@@ -1,0 +1,23 @@
+{
+  "asyncapi": "2.6.0",
+  "info": {
+    "title": "Order Events",
+    "version": "1.0.0"
+  },
+  "channels": {
+    "orders/created": {
+      "publish": {
+        "message": {
+          "name": "OrderCreated"
+        }
+      }
+    },
+    "payments/failed": {
+      "subscribe": {
+        "message": {
+          "name": "PaymentFailed"
+        }
+      }
+    }
+  }
+}

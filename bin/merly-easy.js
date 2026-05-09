@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const process = require("node:process");
 const { spawnSync } = require("node:child_process");
+const { extractSpecRequirements, formatSpecSummary } = require("../lib/spec-adapters");
 
 const VERSION = "0.1.0";
 const CLIENTS = new Set(["codex", "claude"]);
@@ -145,25 +146,38 @@ function runSpecPreflight(argv) {
   const options = parseOptions(argv);
   if (options.help) return printSpecPreflightHelp();
 
-  printSpecPlan("Spec Preflight", options, [
-    "Check that the spec path exists and detect its adapter format.",
-    "Check Git workspace state.",
-    "Check Merly health and credential status.",
-    "Resolve the current repository in Merly when available.",
-  ]);
+  const result = extractSpecFromOptions(options);
+  if (options.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(formatSpecSummary(result, { title: "Spec Preflight", dryRun: options.dryRun }));
 }
 
 function runSpecVerify(argv) {
   const options = parseOptions(argv);
   if (options.help) return printSpecVerifyHelp();
 
-  printSpecPlan("Spec Verify", options, [
-    "Extract requirements from supported spec adapters.",
-    "Collect changed-file context when --changed is provided.",
-    "Run Merly verification evidence where available.",
-    "Write Markdown and JSON reports.",
-    "Apply --fail-on policies only when explicitly requested.",
-  ]);
+  const result = extractSpecFromOptions(options);
+  const payload = {
+    ...result,
+    changed_only: Boolean(options.changed),
+    verification: {
+      status: "not_run",
+      reason: "Merly evidence and report writing are part of the next spec verification slice.",
+    },
+  };
+
+  if (options.json) {
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
+
+  console.log(formatSpecSummary(result, { title: "Spec Verify", dryRun: options.dryRun }));
+  console.log("");
+  console.log(`Changed-file scope: ${options.changed ? "enabled" : "disabled"}`);
+  console.log("Merly evidence: not run in this adapter slice.");
 }
 
 function runSpecReport(argv) {
@@ -187,6 +201,19 @@ function printSpecPlan(title, options, steps) {
     ],
     next: "Spec command implementation is planned for the spec adapter slices.",
   });
+}
+
+function extractSpecFromOptions(options) {
+  const specPath = options.spec || options.input;
+  if (!specPath) {
+    throw new CliError("--spec is required for this spec command.");
+  }
+
+  try {
+    return extractSpecRequirements(specPath, { baseDir: process.cwd() });
+  } catch (error) {
+    throw new CliError(`Could not extract spec requirements: ${error.message}`, 1, "Check the spec path and format.");
+  }
 }
 
 function printPlan({ title, dryRun, steps, next }) {
@@ -291,17 +318,17 @@ Notes:
 
 function printSpecHelp() {
   console.log(`Usage:
-  merly-easy spec preflight --spec <file> [--dry-run]
-  merly-easy spec verify --spec <file> [--changed] [--dry-run]
+  merly-easy spec preflight --spec <file> [--json] [--dry-run]
+  merly-easy spec verify --spec <file> [--changed] [--json] [--dry-run]
   merly-easy spec report --input <file> [--dry-run]`);
 }
 
 function printSpecPreflightHelp() {
-  console.log("Usage: merly-easy spec preflight --spec <file> [--dry-run]");
+  console.log("Usage: merly-easy spec preflight --spec <file> [--json] [--dry-run]");
 }
 
 function printSpecVerifyHelp() {
-  console.log("Usage: merly-easy spec verify --spec <file> [--changed] [--report-format markdown,json] [--dry-run]");
+  console.log("Usage: merly-easy spec verify --spec <file> [--changed] [--json] [--report-format markdown,json] [--dry-run]");
 }
 
 function printSpecReportHelp() {
