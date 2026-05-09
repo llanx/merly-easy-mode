@@ -3,7 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "description": "Lightweight public integration layer for using Merly Mentor with AI coding agents.",
+  "bin": {
+    "merly-easy": "./bin/merly-easy.js"
+  },
   "scripts": {
+    "easy": "node ./bin/merly-easy.js easy",
+    "setup": "node ./bin/merly-easy.js setup",
+    "merly": "node ./bin/merly-easy.js",
+    "test": "node ./scripts/cli-smoke.js",
     "check:public-clean": "node ./scripts/check-public-clean.js",
     "mcp:smoke": "npm --prefix ./mcp-server run mcp:smoke",
     "smoke": "npm run check:public-clean && npm run mcp:smoke"

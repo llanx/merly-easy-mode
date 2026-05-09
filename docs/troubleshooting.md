@@ -16,6 +16,16 @@ MERLY_BASE_URL=http://host:port
 
 in `mcp-server/.env`.
 
+## CLI Help
+
+The CLI scaffold should run without Merly:
+
+```powershell
+npm run merly -- --help
+npm run easy -- --dry-run
+npm run setup -- --client codex --dry-run
+```
+
 ## Credentials Are Missing
 
 `merly_auth_status` and `merly_health` can run without credentials. Repository, issue, and verification tools need one of:

@@ -63,6 +63,9 @@ Use Merly to inspect this repository, choose one safe issue, fix it, run validat
 Current:
 
 ```powershell
+npm run easy -- --dry-run
+npm run setup -- --client codex --dry-run
+npm run setup -- --client claude --dry-run
 npm run mcp:smoke
 npm run check:public-clean
 ```
@@ -71,9 +74,7 @@ Planned:
 
 ```powershell
 npm run easy
-npm run setup -- --client codex
-npm run setup -- --client claude
-npm run merly -- spec preflight --spec <spec-file>
+npm run merly -- spec verify --spec <spec-file> --changed
 ```
 
 The planned commands are part of the Merly Easy Mode roadmap and should be implemented through the public CLI.
