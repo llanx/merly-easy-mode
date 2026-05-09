@@ -22,7 +22,50 @@ const cases = [
   {
     name: "easy dry-run",
     args: ["easy", "--dry-run"],
-    includes: ["Merly Easy Mode (dry run)", "Check Node", "official sources", "Dry run complete"],
+    includes: [
+      "Merly Easy Mode (dry run)",
+      "Selected agent: codex",
+      "Merly Doctor (dry run)",
+      "Merly Auth (dry run)",
+      "Codex Setup (dry run)",
+      "Repository registration is optional",
+      "Copy this into the connected agent",
+      "No files were written",
+    ],
+  },
+  {
+    name: "easy claude dry-run",
+    args: ["easy", "--client", "claude", "--dry-run"],
+    env: { MERLY_EASY_CLAUDE_CONFIG: path.join(repoRoot, ".tmp", "easy-claude.json") },
+    includes: ["Selected agent: claude", "Claude Setup (dry run)", "\"mcpServers\"", "Copy this into the connected agent"],
+  },
+  {
+    name: "easy healthy mock",
+    args: ["easy", "--client", "codex"],
+    env: {
+      MERLY_EASY_DOCTOR_MOCK: "healthy",
+      MERLY_EASY_AUTH_MOCK: "existing",
+      MERLY_EASY_CODEX_CONFIG: path.join(repoRoot, ".tmp", "easy-codex.toml"),
+    },
+    includes: [
+      "Merly Easy Mode",
+      "Doctor completed without blockers",
+      "Auth setup completed without blockers",
+      "Codex Setup (dry run)",
+      "PASS mcp_tool_smoke: tools=23; api=ok; daemon=ok",
+      "Easy Mode completed without blockers",
+    ],
+  },
+  {
+    name: "easy missing merly mock",
+    args: ["easy", "--client", "codex", "--platform", "win32"],
+    env: { MERLY_EASY_DOCTOR_MOCK: "missing" },
+    status: 1,
+    includes: [
+      "Merly Install/Start Guidance",
+      "Windows Start menu",
+      "Resume with: npm run easy -- --client codex",
+    ],
   },
   {
     name: "codex setup dry-run",

@@ -58,23 +58,17 @@ function runEasy(argv) {
   const options = parseOptions(argv);
   if (options.help) return printEasyHelp();
 
-  printPlan({
-    title: "Merly Easy Mode",
-    dryRun: options.dryRun,
-    steps: [
-      "Check Node, platform, Git workspace, and local dependencies.",
-      "Check whether the Merly Bridge API is reachable.",
-      "Guide Merly install/start from official sources if the bridge is unavailable.",
-      "Guide API key setup and write credentials only to ignored local env files.",
-      "Configure Codex or Claude after showing the proposed config change.",
-      "Run MCP smoke checks.",
-      "Optionally resolve or register the current Git repository in Merly.",
-      "Print the first useful AI-agent prompt.",
-    ],
-    next: options.dryRun
-      ? "Dry run complete. Later slices will connect these steps to diagnostics and setup actions."
-      : "Interactive Easy Mode implementation is planned for a later slice. Run with --dry-run today.",
-  });
+  const client = String(options.client || "codex").toLowerCase();
+  if (!CLIENTS.has(client)) {
+    throw new CliError(`Unsupported client: ${client}`, 1, "Supported clients: codex, claude.");
+  }
+
+  const context = buildEasyContext(options, client);
+  if (options.dryRun) {
+    return runEasyDryRun(context);
+  }
+
+  return runEasyWizard(context);
 }
 
 function runSetup(argv) {
@@ -229,6 +223,8 @@ function parseOptions(argv) {
       options.skipVerify = true;
     } else if (arg === "--from-env") {
       options.fromEnv = true;
+    } else if (arg === "--register-repo") {
+      options.registerRepo = true;
     } else if (arg.startsWith("--")) {
       const key = toCamelCase(arg.slice(2));
       const next = argv[index + 1];
@@ -255,7 +251,7 @@ function printGlobalHelp() {
   console.log(`merly-easy ${VERSION}
 
 Usage:
-  merly-easy easy [--dry-run]
+  merly-easy easy [--client <codex|claude>] [--register-repo] [--dry-run]
   merly-easy setup --client <codex|claude> [--dry-run]
   merly-easy doctor [--platform <win32|darwin|linux>] [--dry-run]
   merly-easy auth [--flow <ui|advanced>] [--write] [--dry-run]
@@ -271,7 +267,7 @@ Commands:
 }
 
 function printEasyHelp() {
-  console.log("Usage: merly-easy easy [--dry-run]");
+  console.log("Usage: merly-easy easy [--client <codex|claude>] [--register-repo] [--platform <win32|darwin|linux>] [--dry-run]");
 }
 
 function printSetupHelp() {
@@ -316,6 +312,146 @@ function existsLabel(filePath) {
   return `${fs.existsSync(filePath) ? "found" : "missing"} (${filePath})`;
 }
 
+function buildEasyContext(options, client) {
+  const repoRoot = path.resolve(__dirname, "..");
+  const mcpServerRoot = path.join(repoRoot, "mcp-server");
+  return {
+    options,
+    client,
+    repoRoot,
+    mcpServerRoot,
+    platform: options.platform || process.env.MERLY_EASY_PLATFORM_MOCK || process.platform,
+  };
+}
+
+function runEasyDryRun(context) {
+  console.log("Merly Easy Mode (dry run)");
+  console.log("");
+  console.log(`Selected agent: ${context.client}`);
+  console.log("No files were written.");
+
+  printSection("1. Doctor");
+  const diagnostics = collectDoctorDiagnostics({
+    dryRun: true,
+    mock: process.env.MERLY_EASY_DOCTOR_MOCK || "",
+    platform: context.platform,
+  });
+  printDoctorReport(diagnostics);
+
+  printSection("2. Auth");
+  runUiAuth({ dryRun: true }, buildAuthContext({}));
+
+  printSection("3. Agent Setup");
+  printSetupProposal(buildSetupProposal(context.client, context.options), { dryRun: true });
+
+  printSection("4. MCP Smoke");
+  console.log("SKIP mcp_tool_smoke: Dry run skipped MCP server startup and tool listing.");
+
+  printSection("5. Repository Registration");
+  printRepositoryRegistrationGuidance(context);
+
+  printSection("6. First Prompt");
+  printFirstPrompt(context);
+}
+
+function runEasyWizard(context) {
+  console.log("Merly Easy Mode");
+  console.log("");
+  console.log(`Selected agent: ${context.client}`);
+
+  printSection("1. Doctor");
+  const diagnostics = collectDoctorDiagnostics({
+    dryRun: false,
+    mock: process.env.MERLY_EASY_DOCTOR_MOCK || "",
+    platform: context.platform,
+  });
+  printDoctorReport(diagnostics);
+  if (hasFailedChecks(diagnostics.checks)) {
+    printEasyResume(context);
+    process.exitCode = 1;
+    return;
+  }
+
+  printSection("2. Auth");
+  const authContext = buildAuthContext({});
+  const authVerification = runAuthVerification({
+    context: authContext,
+    envOverrides: {},
+  });
+  printAuthVerification(authVerification);
+  if (!authVerification.ok) {
+    console.log("Create a key in the local Merly UI, then run:");
+    console.log("npm run merly -- auth --flow ui --from-env --write");
+    printEasyResume(context);
+    process.exitCode = 1;
+    return;
+  }
+
+  printSection("3. Agent Setup");
+  printSetupProposal(buildSetupProposal(context.client, context.options), { dryRun: true });
+
+  printSection("4. MCP Smoke");
+  printMcpSmokeFromDoctor(diagnostics);
+
+  printSection("5. Repository Registration");
+  printRepositoryRegistrationGuidance(context);
+
+  printSection("6. First Prompt");
+  printFirstPrompt(context);
+  console.log("");
+  console.log("Easy Mode completed without blockers.");
+}
+
+function printSection(title) {
+  console.log("");
+  console.log(title);
+  console.log("-".repeat(title.length));
+}
+
+function hasFailedChecks(checks) {
+  return checks.some((check) => check.status === "fail");
+}
+
+function printMcpSmokeFromDoctor(diagnostics) {
+  const smoke = diagnostics.checks.find((check) => check.name === "mcp_tool_smoke");
+  if (!smoke) {
+    console.log("SKIP mcp_tool_smoke: Doctor did not run MCP smoke.");
+    return;
+  }
+
+  console.log(`${statusIcon(smoke.status)} ${smoke.name}: ${smoke.detail}`);
+}
+
+function printRepositoryRegistrationGuidance(context) {
+  if (context.options.registerRepo) {
+    console.log("Repository registration requested, but Easy Mode will not mutate Merly repository records directly.");
+    console.log("Use the first prompt below and require the agent to ask before calling merly_create_repository.");
+    return;
+  }
+
+  console.log("Repository registration is optional and was not performed.");
+  console.log("The agent can resolve the workspace first and ask before registering or initializing a repository in Merly.");
+}
+
+function printFirstPrompt(context) {
+  console.log("Copy this into the connected agent:");
+  console.log("");
+  console.log(buildFirstPrompt(context));
+}
+
+function buildFirstPrompt(context) {
+  const registerClause = context.options.registerRepo
+    ? "Resolve or initialize this repository in Merly if needed, but ask before registering a repository or creating commits."
+    : "Resolve this repository in Merly if possible; ask before registering a repository or creating commits.";
+
+  return `Use Merly to inspect this repository. ${registerClause} Choose one safe issue, fix it, run validation, and verify the changed code.`;
+}
+
+function printEasyResume(context) {
+  console.log("");
+  console.log(`Resume with: npm run easy -- --client ${context.client}`);
+}
+
 function buildAuthContext(options) {
   const repoRoot = path.resolve(__dirname, "..");
   const mcpServerRoot = path.join(repoRoot, "mcp-server");
@@ -336,8 +472,9 @@ function runUiAuth(options, context) {
 
   if (options.dryRun) {
     console.log("1. Open the local Merly UI and create an API key.");
-    console.log("2. Rerun this command with --api-key or --dif-api-key and --write.");
-    console.log("3. Verify credentials with auth smoke checks.");
+    console.log("2. Set MERLY_API_KEY or MERLY_DIF_API_KEY in the current shell.");
+    console.log("3. Rerun this command with --from-env --write.");
+    console.log("4. Verify credentials with auth smoke checks.");
     console.log("");
     console.log("No files were written.");
     return;
@@ -737,6 +874,16 @@ function mockAuthVerification(mock, envOverrides) {
       checks: [
         { status: "pass", name: "auth_status", detail: `base_url=${DEFAULT_MERLY_BASE_URL}; mentor=none; dif=none` },
         { status: "fail", name: "credentials", detail: "No Merly API credentials are available yet." },
+      ],
+    };
+  }
+
+  if (mock === "existing" || mock === "healthy") {
+    return {
+      ok: true,
+      checks: [
+        { status: "pass", name: "auth_status", detail: `base_url=${DEFAULT_MERLY_BASE_URL}; mentor=api_key; dif=api_key` },
+        { status: "pass", name: "auth_smoke", detail: "identity=ok; repositories=checked" },
       ],
     };
   }

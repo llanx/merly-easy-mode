@@ -47,6 +47,7 @@ Remove-Item Env:\MERLY_API_KEY
 From the repository root:
 
 ```powershell
+npm run easy -- --client codex
 npm run merly -- doctor
 npm run mcp:smoke
 ```
@@ -58,6 +59,13 @@ Expected result:
 - Credential status reflects the keys you configured.
 
 ## Connect An Agent
+
+Easy Mode prints a config proposal and a first prompt:
+
+```powershell
+npm run easy -- --client codex
+npm run easy -- --client claude
+```
 
 Generate a dry-run config proposal for your preferred agent:
 
@@ -79,10 +87,12 @@ Use Merly to inspect this repository, choose one safe issue, fix it, run validat
 Current:
 
 ```powershell
-npm run easy -- --dry-run
+npm run easy -- --client codex
+npm run easy -- --client claude --dry-run
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor
+npm run merly -- auth
 npm run mcp:smoke
 npm run check:public-clean
 ```
@@ -90,7 +100,6 @@ npm run check:public-clean
 Planned:
 
 ```powershell
-npm run easy
 npm run merly -- spec verify --spec <spec-file> --changed
 ```
 

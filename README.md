@@ -34,7 +34,7 @@ merly-codex-integration/
 ## Modes
 
 - **Adapter Mode:** for users who already have Merly running and want to wire an AI coding agent to the MCP server.
-- **Easy Mode:** the planned guided path for first-time users to install/start Merly, configure credentials, connect an agent, and reach a first useful Merly prompt.
+- **Easy Mode:** the guided path for first-time users to check Merly, verify credentials, connect an agent, and reach a first useful Merly prompt.
 - **Spec Hooks:** planned optional commands for teams that want Merly evidence in their own specification-driven process.
 
 ## Commands
@@ -43,6 +43,7 @@ The public CLI entrypoint is `merly-easy`. During local development, use npm wra
 
 ```powershell
 npm run easy -- --dry-run
+npm run easy -- --client codex
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor
