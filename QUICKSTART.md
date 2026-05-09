@@ -60,7 +60,16 @@ Expected result:
 
 ## Connect An Agent
 
-Easy Mode prints a config proposal and a first prompt:
+If you open Codex or Claude in the repository first, the root agent instruction files ask the agent to run a read-only bootstrap check and offer guided setup when the checkout is not ready.
+
+You can run the same check directly:
+
+```powershell
+npm run merly -- bootstrap status --client codex --json
+npm run merly -- bootstrap status --client claude --json
+```
+
+Easy Mode prints a config proposal and verification guidance:
 
 ```powershell
 npm run easy -- --client codex
@@ -76,17 +85,16 @@ npm run setup -- --client claude --dry-run
 
 Use [docs/codex-config-example.md](docs/codex-config-example.md) for Codex or [docs/claude-config-example.md](docs/claude-config-example.md) for Claude. Replace `<checkout>` with your local repository path when using the static examples.
 
-After the agent can see the MCP server, try:
+After the agent can see the MCP server, ask it to inspect the repository with Merly, choose one safe issue, run validation, and verify the change.
 
-```text
-Use Merly to inspect this repository, choose one safe issue, fix it, run validation, and verify the change.
-```
+See [docs/agent-bootstrap.md](docs/agent-bootstrap.md) for the agent-assisted first-run flow.
 
 ## Useful Commands
 
 ```powershell
 npm run easy -- --client codex
 npm run easy -- --client claude --dry-run
+npm run merly -- bootstrap status --client codex --json
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor

@@ -9,6 +9,7 @@ const checks = [
   { name: "test suite", args: ["test"] },
   { name: "public clean and MCP smoke", args: ["run", "smoke"] },
   { name: "easy mode dry run", args: ["run", "easy", "--", "--dry-run"] },
+  { name: "bootstrap status", args: ["run", "merly", "--", "bootstrap", "status", "--client", "codex", "--json"] },
   { name: "codex setup dry run", args: ["run", "setup", "--", "--client", "codex", "--dry-run"] },
   { name: "claude setup dry run", args: ["run", "setup", "--", "--client", "claude", "--dry-run"] },
   {

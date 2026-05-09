@@ -51,6 +51,8 @@ function main(argv) {
         return runDoctor(rest);
       case "auth":
         return runAuth(rest);
+      case "bootstrap":
+        return runBootstrap(rest);
       case "spec":
         return runSpec(rest);
       default:
@@ -134,6 +136,44 @@ function runAuth(argv) {
   }
 
   return runUiAuth(options, context);
+}
+
+function runBootstrap(argv) {
+  const subcommand = argv[0] && !argv[0].startsWith("--") ? argv[0] : "status";
+  const rest = subcommand === "status" ? (argv[0] === "status" ? argv.slice(1) : argv) : argv.slice(1);
+
+  if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
+    return printBootstrapHelp();
+  }
+
+  switch (subcommand) {
+    case "status":
+      return runBootstrapStatus(rest);
+    default:
+      throw new CliError(`Unknown bootstrap command: ${subcommand}`, 1, "Run `merly-easy bootstrap --help` for available bootstrap commands.");
+  }
+}
+
+function runBootstrapStatus(argv) {
+  const options = parseOptions(argv);
+  if (options.help) return printBootstrapHelp();
+
+  const client = String(options.client || "codex").toLowerCase();
+  if (!CLIENTS.has(client)) {
+    throw new CliError(`Unsupported client: ${client}`, 1, "Supported clients: codex, claude.");
+  }
+
+  const status = collectBootstrapStatus({
+    client,
+    platform: options.platform || process.env.MERLY_EASY_PLATFORM_MOCK || process.platform,
+  });
+
+  if (options.json) {
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
+
+  printBootstrapStatus(status);
 }
 
 function runSpec(argv) {
@@ -495,6 +535,7 @@ function printGlobalHelp() {
 
 Usage:
   merly-easy easy [--client <codex|claude>] [--register-repo] [--dry-run]
+  merly-easy bootstrap status [--client <codex|claude>] [--json]
   merly-easy setup --client <codex|claude> [--dry-run]
   merly-easy doctor [--platform <win32|darwin|linux>] [--dry-run]
   merly-easy auth [--flow <ui|advanced>] [--write] [--dry-run]
@@ -502,6 +543,7 @@ Usage:
 
 Commands:
   easy      Guided first-time onboarding flow.
+  bootstrap Read-only first-run status for AI agents.
   setup     Agent setup for Codex or Claude.
   doctor    Local diagnostics.
   auth      API-key setup.
@@ -530,6 +572,10 @@ Notes:
   UI flow is preferred. Use --from-env to read MERLY_API_KEY or MERLY_DIF_API_KEY from the current shell.
   It stores only API keys in ignored local env files.
   Advanced flow reads MERLY_EMAIL and MERLY_PASSWORD from the current environment only.`);
+}
+
+function printBootstrapHelp() {
+  console.log("Usage: merly-easy bootstrap status [--client <codex|claude>] [--platform <win32|darwin|linux>] [--json]");
 }
 
 function printSpecHelp() {
@@ -569,6 +615,192 @@ function buildEasyContext(options, client) {
   };
 }
 
+function collectBootstrapStatus({ client, platform }) {
+  const repoRoot = path.resolve(__dirname, "..");
+  const mcpServerRoot = path.join(repoRoot, "mcp-server");
+  const setupProposal = buildSetupProposal(client, { platform });
+  const statePath = resolveBootstrapStatePath(repoRoot);
+  const state = readBootstrapState(statePath);
+  const envPath = path.join(mcpServerRoot, ".env");
+  const instructionFile = client === "codex" ? path.join(repoRoot, "AGENTS.md") : path.join(repoRoot, "CLAUDE.md");
+  const checks = [
+    {
+      name: "node",
+      status: satisfiesNodeMajor(20) ? "pass" : "fail",
+      detail: `${process.version} on ${process.platform}`,
+    },
+    {
+      name: "git_workspace",
+      ...gitWorkspaceCheck(repoRoot),
+    },
+    {
+      name: "mcp_server_entrypoint",
+      status: fs.existsSync(setupProposal.serverPath) ? "pass" : "fail",
+      detail: relativeOrAbsolute(repoRoot, setupProposal.serverPath),
+    },
+    {
+      name: "mcp_dependencies",
+      status: fs.existsSync(path.join(mcpServerRoot, "node_modules")) ? "pass" : "fail",
+      detail: fs.existsSync(path.join(mcpServerRoot, "node_modules"))
+        ? "mcp-server/node_modules found"
+        : "mcp-server dependencies are not installed; run npm --prefix ./mcp-server install.",
+    },
+    {
+      name: "local_env",
+      status: fs.existsSync(envPath) ? "pass" : "warn",
+      detail: fs.existsSync(envPath)
+        ? "mcp-server/.env found"
+        : "mcp-server/.env not found; run auth setup before protected Merly tools.",
+    },
+    {
+      name: "agent_pack",
+      status: fs.existsSync(path.join(repoRoot, setupProposal.agentPack)) ? "pass" : "fail",
+      detail: setupProposal.agentPack,
+    },
+    {
+      name: "agent_instruction_file",
+      status: fs.existsSync(instructionFile) ? "pass" : "warn",
+      detail: fs.existsSync(instructionFile)
+        ? path.basename(instructionFile)
+        : `${path.basename(instructionFile)} not found; the agent may not auto-offer bootstrap.`,
+    },
+    {
+      name: "agent_config",
+      ...agentConfigCheck(client, setupProposal),
+    },
+  ];
+  const failed = checks.filter((check) => check.status === "fail");
+  const warned = checks.filter((check) => check.status === "warn");
+  const firstRun = !state.completed;
+
+  return {
+    schema_version: "merly-easy.bootstrap-status.v1",
+    client,
+    repo_root: repoRoot,
+    state_file: statePath,
+    first_run: firstRun,
+    ready: failed.length === 0 && warned.length === 0 && !firstRun,
+    needs_bootstrap: firstRun || failed.length > 0 || warned.length > 0,
+    completed_at: state.completed_at || null,
+    checks,
+    blockers: failed.map((check) => check.name),
+    warnings: warned.map((check) => check.name),
+    recommended_next_command: firstRun || failed.length > 0 || warned.length > 0
+      ? `npm run easy -- --client ${client}`
+      : "Ask the connected agent to call merly_health.",
+    notes: buildBootstrapStatusNotes({ firstRun, failed, warned, client }),
+  };
+}
+
+function printBootstrapStatus(status) {
+  console.log("Merly Bootstrap Status");
+  console.log("");
+  console.log(`Selected agent: ${status.client}`);
+  console.log(`First run: ${status.first_run ? "yes" : "no"}`);
+  console.log(`Ready: ${status.ready ? "yes" : "no"}`);
+  console.log("");
+
+  for (const check of status.checks) {
+    console.log(`${statusIcon(check.status)} ${check.name}: ${check.detail}`);
+  }
+
+  console.log("");
+  if (status.needs_bootstrap) {
+    console.log("Bootstrap is not complete.");
+    for (const note of status.notes) {
+      console.log(`- ${note}`);
+    }
+  } else {
+    console.log("Bootstrap appears complete.");
+  }
+  console.log(`Recommended next command: ${status.recommended_next_command}`);
+}
+
+function buildBootstrapStatusNotes({ firstRun, failed, warned, client }) {
+  const notes = [];
+  if (firstRun) {
+    notes.push("No completed bootstrap state was found for this checkout.");
+  }
+  if (failed.length > 0) {
+    notes.push("One or more required local checks failed.");
+  }
+  if (warned.length > 0) {
+    notes.push("Some optional setup is missing or has not been verified.");
+  }
+  notes.push(`If the user agrees, run Easy Mode for ${client} and stop before writing secrets or user-level config without approval.`);
+  return notes;
+}
+
+function resolveBootstrapStatePath(repoRoot) {
+  return path.resolve(process.env.MERLY_EASY_BOOTSTRAP_STATE || path.join(repoRoot, ".merly-local", "bootstrap-state.json"));
+}
+
+function readBootstrapState(statePath) {
+  if (!fs.existsSync(statePath)) return { completed: false };
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    return {
+      completed: payload.schema_version === "merly-easy.bootstrap-state.v1" && Boolean(payload.completed_at),
+      completed_at: payload.completed_at || null,
+    };
+  } catch {
+    return { completed: false };
+  }
+}
+
+function writeBootstrapState(repoRoot, client) {
+  const statePath = resolveBootstrapStatePath(repoRoot);
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(
+    statePath,
+    `${JSON.stringify({
+      schema_version: "merly-easy.bootstrap-state.v1",
+      completed_at: new Date().toISOString(),
+      client,
+    }, null, 2)}\n`,
+    "utf8",
+  );
+  return statePath;
+}
+
+function agentConfigCheck(client, setupProposal) {
+  if (!fs.existsSync(setupProposal.targetPath)) {
+    return {
+      status: "warn",
+      detail: `Target config not found yet: ${setupProposal.targetPath}`,
+    };
+  }
+
+  let content;
+  try {
+    content = fs.readFileSync(setupProposal.targetPath, "utf8");
+  } catch (error) {
+    return {
+      status: "warn",
+      detail: `Target config exists but could not be read: ${error.message}`,
+    };
+  }
+
+  if (client === "codex") {
+    return /\[mcp_servers\.merly\]/.test(content)
+      ? { status: "pass", detail: "Codex config contains mcp_servers.merly." }
+      : { status: "warn", detail: "Codex config exists but does not contain mcp_servers.merly." };
+  }
+
+  try {
+    const config = JSON.parse(content);
+    return config?.mcpServers?.merly
+      ? { status: "pass", detail: "Claude config contains mcpServers.merly." }
+      : { status: "warn", detail: "Claude config exists but does not contain mcpServers.merly." };
+  } catch (error) {
+    return {
+      status: "warn",
+      detail: `Claude config exists but is not valid JSON: ${error.message}`,
+    };
+  }
+}
+
 function runEasyDryRun(context) {
   console.log("Merly Easy Mode (dry run)");
   console.log("");
@@ -595,7 +827,7 @@ function runEasyDryRun(context) {
   printSection("5. Repository Registration");
   printRepositoryRegistrationGuidance(context);
 
-  printSection("6. First Prompt");
+  printSection("6. Agent Handoff");
   printFirstPrompt(context);
 }
 
@@ -641,8 +873,11 @@ function runEasyWizard(context) {
   printSection("5. Repository Registration");
   printRepositoryRegistrationGuidance(context);
 
-  printSection("6. First Prompt");
+  printSection("6. Agent Handoff");
   printFirstPrompt(context);
+  console.log("");
+  const statePath = writeBootstrapState(context.repoRoot, context.client);
+  console.log(`Recorded bootstrap state: ${statePath}`);
   console.log("");
   console.log("Easy Mode completed without blockers.");
 }
@@ -670,7 +905,7 @@ function printMcpSmokeFromDoctor(diagnostics) {
 function printRepositoryRegistrationGuidance(context) {
   if (context.options.registerRepo) {
     console.log("Repository registration requested, but Easy Mode will not mutate Merly repository records directly.");
-    console.log("Use the first prompt below and require the agent to ask before calling merly_create_repository.");
+    console.log("Use the handoff guidance below and require the agent to ask before calling merly_create_repository.");
     return;
   }
 
@@ -679,7 +914,7 @@ function printRepositoryRegistrationGuidance(context) {
 }
 
 function printFirstPrompt(context) {
-  console.log("Copy this into the connected agent:");
+  console.log("Agent handoff guidance:");
   console.log("");
   console.log(buildFirstPrompt(context));
 }
@@ -689,7 +924,7 @@ function buildFirstPrompt(context) {
     ? "Resolve or initialize this repository in Merly if needed, but ask before registering a repository or creating commits."
     : "Resolve this repository in Merly if possible; ask before registering a repository or creating commits.";
 
-  return `Use Merly to inspect this repository. ${registerClause} Choose one safe issue, fix it, run validation, and verify the changed code.`;
+  return `After MCP config is active, the connected ${context.client} session should use Merly to inspect this repository. ${registerClause} It can then choose one safe issue, fix it, run validation, and verify the changed code.`;
 }
 
 function printEasyResume(context) {
@@ -1627,6 +1862,15 @@ function firstUsefulLine(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean);
+}
+
+function relativeOrAbsolute(basePath, targetPath) {
+  const relativePath = path.relative(basePath, targetPath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return targetPath;
+  }
+
+  return relativePath.split(path.sep).join("/");
 }
 
 function toCamelCase(value) {

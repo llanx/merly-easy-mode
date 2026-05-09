@@ -16,6 +16,7 @@ This runs:
 - Public-clean guard.
 - MCP tool smoke against the local Merly bridge.
 - Easy Mode dry run.
+- Agent bootstrap status check.
 - Codex and Claude setup dry runs.
 - Spec verification dry run with an opt-in CI policy.
 
@@ -25,6 +26,7 @@ If Merly is not running locally, `npm run smoke` and `npm run release:check` can
 
 - Fresh clone on Windows: install dependencies, run Easy Mode dry run, run `npm run merly -- doctor`, and run MCP smoke with Merly started.
 - Fresh clone on macOS or Linux: repeat the same flow with shell commands from `QUICKSTART.md`.
+- Confirm `npm run merly -- bootstrap status --client codex --json` is read-only and reports whether first-run setup is needed.
 - Confirm `npm run setup -- --client codex --dry-run` prints a usable config proposal and does not write user-level config.
 - Confirm `npm run setup -- --client claude --dry-run` prints a usable config proposal and does not write user-level config.
 - Confirm `npm run merly -- auth --flow ui --dry-run` explains the UI-created key path without reading secrets.

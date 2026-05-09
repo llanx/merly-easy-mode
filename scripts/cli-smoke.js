@@ -10,6 +10,8 @@ const cli = path.join(repoRoot, "bin", "merly-easy.js");
 const authTempDir = path.join(repoRoot, ".merly-local", "cli-smoke");
 const uiAuthEnv = path.join(authTempDir, "ui.env");
 const advancedAuthEnv = path.join(authTempDir, "advanced.env");
+const firstRunState = path.join(authTempDir, "missing-bootstrap-state.json");
+const easyState = path.join(authTempDir, "easy-bootstrap-state.json");
 
 fs.rmSync(authTempDir, { recursive: true, force: true });
 
@@ -17,7 +19,19 @@ const cases = [
   {
     name: "global help",
     args: ["--help"],
-    includes: ["merly-easy", "setup --client <codex|claude>", "spec <preflight|verify|report>"],
+    includes: ["merly-easy", "bootstrap status", "setup --client <codex|claude>", "spec <preflight|verify|report>"],
+  },
+  {
+    name: "bootstrap status json first run",
+    args: ["bootstrap", "status", "--client", "codex", "--json"],
+    env: { MERLY_EASY_BOOTSTRAP_STATE: firstRunState },
+    includes: [
+      "\"schema_version\": \"merly-easy.bootstrap-status.v1\"",
+      "\"client\": \"codex\"",
+      "\"first_run\": true",
+      "\"needs_bootstrap\": true",
+      "\"recommended_next_command\": \"npm run easy -- --client codex\"",
+    ],
   },
   {
     name: "easy dry-run",
@@ -29,7 +43,7 @@ const cases = [
       "Merly Auth (dry run)",
       "Codex Setup (dry run)",
       "Repository registration is optional",
-      "Copy this into the connected agent",
+      "Agent handoff guidance",
       "No files were written",
     ],
   },
@@ -37,7 +51,7 @@ const cases = [
     name: "easy claude dry-run",
     args: ["easy", "--client", "claude", "--dry-run"],
     env: { MERLY_EASY_CLAUDE_CONFIG: path.join(repoRoot, ".tmp", "easy-claude.json") },
-    includes: ["Selected agent: claude", "Claude Setup (dry run)", "\"mcpServers\"", "Copy this into the connected agent"],
+    includes: ["Selected agent: claude", "Claude Setup (dry run)", "\"mcpServers\"", "Agent handoff guidance"],
   },
   {
     name: "easy healthy mock",
@@ -46,6 +60,7 @@ const cases = [
       MERLY_EASY_DOCTOR_MOCK: "healthy",
       MERLY_EASY_AUTH_MOCK: "existing",
       MERLY_EASY_CODEX_CONFIG: path.join(repoRoot, ".tmp", "easy-codex.toml"),
+      MERLY_EASY_BOOTSTRAP_STATE: easyState,
     },
     includes: [
       "Merly Easy Mode",
@@ -53,6 +68,7 @@ const cases = [
       "Auth setup completed without blockers",
       "Codex Setup (dry run)",
       "PASS mcp_tool_smoke: tools=23; api=ok; daemon=ok",
+      "Recorded bootstrap state:",
       "Easy Mode completed without blockers",
     ],
   },
@@ -200,6 +216,9 @@ assert.match(fs.readFileSync(uiAuthEnv, "utf8"), /MERLY_API_KEY=ui-test-api-key/
 const advancedEnvContent = fs.readFileSync(advancedAuthEnv, "utf8");
 assert.match(advancedEnvContent, /MERLY_API_KEY=mock-created-api-key-value/);
 assert.doesNotMatch(advancedEnvContent, /MERLY_PASSWORD|MERLY_EMAIL|MERLY_BEARER_TOKEN/);
+const easyStateContent = JSON.parse(fs.readFileSync(easyState, "utf8"));
+assert.equal(easyStateContent.schema_version, "merly-easy.bootstrap-state.v1");
+assert.equal(easyStateContent.client, "codex");
 fs.rmSync(authTempDir, { recursive: true, force: true });
 
 console.log(`CLI smoke passed (${cases.length + 1} cases).`);

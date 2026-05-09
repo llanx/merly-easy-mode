@@ -15,6 +15,8 @@ This repository should contain only integration code, documentation, and local d
 
 ```text
 merly-codex-integration/
+  AGENTS.md
+  CLAUDE.md
   QUICKSTART.md
   agent-packs/
     claude/
@@ -23,6 +25,7 @@ merly-codex-integration/
     merly-easy.js
   docs/
     auth-setup.md
+    agent-bootstrap.md
     claude-config-example.md
     codex-config-example.md
     merly-install-start.md
@@ -54,6 +57,7 @@ The public CLI entrypoint is `merly-easy`. During local development, use npm wra
 
 ```powershell
 npm run easy -- --dry-run
+npm run merly -- bootstrap status --client codex --json
 npm run easy -- --client codex
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
@@ -68,6 +72,7 @@ npm run release:check
 ## Integration Pieces
 
 - The MCP server exposes typed tools backed by the local Merly Mentor API.
+- Root `AGENTS.md` and `CLAUDE.md` files let Codex and Claude detect first-run state and offer guided bootstrap.
 - The Codex and Claude agent packs describe the repeatable automated-fix workflow.
 - The connected AI agent owns local source-code edits and test execution.
 - Merly provides issue discovery, code insight, and post-fix verification.
@@ -75,6 +80,7 @@ npm run release:check
 Start with:
 
 - [QUICKSTART.md](QUICKSTART.md) for the shortest clone-to-smoke path.
+- [docs/agent-bootstrap.md](docs/agent-bootstrap.md) for the agent-assisted first-run flow.
 - [mcp-server/README.md](mcp-server/README.md) for MCP setup and smoke commands.
 - [docs/merly-openapi-summary.md](docs/merly-openapi-summary.md) for the sanitized Merly API subset the MCP server wraps.
 - [docs/codex-config-example.md](docs/codex-config-example.md) for local Codex MCP wiring.
