@@ -82,9 +82,7 @@ After the agent can see the MCP server, try:
 Use Merly to inspect this repository, choose one safe issue, fix it, run validation, and verify the change.
 ```
 
-## Current And Planned Commands
-
-Current:
+## Useful Commands
 
 ```powershell
 npm run easy -- --client codex
@@ -99,4 +97,7 @@ npm run merly -- spec verify --spec fixtures/specs/markdown-basic.md --changed -
 npm run merly -- spec report --input .merly-local/spec-reports/markdown-basic-spec-report.json
 npm run mcp:smoke
 npm run check:public-clean
+npm run release:check
 ```
+
+`npm run release:check` runs the public release gate. It expects Merly to be running because it includes MCP smoke validation.

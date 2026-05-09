@@ -422,18 +422,6 @@ function applySpecPolicyExit(policyResult) {
   }
 }
 
-function printSpecPlan(title, options, steps) {
-  printPlan({
-    title,
-    dryRun: options.dryRun,
-    steps: [
-      `Spec input: ${options.spec || options.input || "(not supplied in scaffold)"}`,
-      ...steps,
-    ],
-    next: "Spec command implementation is planned for the spec adapter slices.",
-  });
-}
-
 function extractSpecFromOptions(options) {
   const specPath = options.spec || options.input;
   if (!specPath) {
@@ -445,16 +433,6 @@ function extractSpecFromOptions(options) {
   } catch (error) {
     throw new CliError(`Could not extract spec requirements: ${error.message}`, 1, "Check the spec path and format.");
   }
-}
-
-function printPlan({ title, dryRun, steps, next }) {
-  console.log(`${title}${dryRun ? " (dry run)" : ""}`);
-  console.log("");
-  for (const [index, step] of steps.entries()) {
-    console.log(`${index + 1}. ${step}`);
-  }
-  console.log("");
-  console.log(next);
 }
 
 function parseOptions(argv) {
@@ -525,8 +503,8 @@ Usage:
 Commands:
   easy      Guided first-time onboarding flow.
   setup     Agent setup for Codex or Claude.
-  doctor    Local diagnostics scaffold.
-  auth      API-key setup scaffold.
+  doctor    Local diagnostics.
+  auth      API-key setup.
   spec      Optional specification-driven verification hooks.
 `);
 }
