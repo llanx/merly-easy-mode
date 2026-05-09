@@ -5,6 +5,14 @@ const path = require("node:path");
 const process = require("node:process");
 const { spawnSync } = require("node:child_process");
 const { extractSpecRequirements, formatSpecSummary } = require("../lib/spec-adapters");
+const {
+  buildSpecVerificationReport,
+  collectChangedFiles,
+  readSpecReport,
+  renderSpecReportMarkdown,
+  resolveSpecReportOutput,
+  writeSpecReports,
+} = require("../lib/spec-reports");
 
 const VERSION = "0.1.0";
 const CLIENTS = new Set(["codex", "claude"]);
@@ -159,36 +167,203 @@ function runSpecVerify(argv) {
   const options = parseOptions(argv);
   if (options.help) return printSpecVerifyHelp();
 
-  const result = extractSpecFromOptions(options);
-  const payload = {
-    ...result,
-    changed_only: Boolean(options.changed),
-    verification: {
-      status: "not_run",
-      reason: "Merly evidence and report writing are part of the next spec verification slice.",
+  const repoRoot = path.resolve(__dirname, "..");
+  const extraction = extractSpecFromOptions(options);
+  const changeResult = collectChangedFiles(repoRoot, { changedOnly: Boolean(options.changed) });
+  const evidenceResult = collectSpecMerlyEvidence({ dryRun: options.dryRun });
+  const output = resolveSpecReportOutput(options, repoRoot, extraction.spec_path);
+  const skippedChecks = [
+    ...changeResult.skippedChecks,
+    ...evidenceResult.skippedChecks,
+    ...buildSpecVerificationSkippedChecks(changeResult.files),
+  ];
+  const report = buildSpecVerificationReport({
+    extraction,
+    changedFiles: changeResult.files,
+    merlyEvidence: evidenceResult.merlyEvidence,
+    skippedChecks,
+    options: {
+      changedOnly: Boolean(options.changed),
+      outputDir: output.displayOutputDir,
     },
-  };
+    outputs: {
+      markdown: output.displayMarkdownPath,
+      json: output.displayJsonPath,
+    },
+  });
 
   if (options.json) {
+    const payload = options.dryRun ? report : writeSpecReports(report, output).report;
     console.log(JSON.stringify(payload, null, 2));
     return;
   }
 
-  console.log(formatSpecSummary(result, { title: "Spec Verify", dryRun: options.dryRun }));
+  console.log(formatSpecSummary(extraction, { title: "Spec Verify", dryRun: options.dryRun }));
   console.log("");
   console.log(`Changed-file scope: ${options.changed ? "enabled" : "disabled"}`);
-  console.log("Merly evidence: not run in this adapter slice.");
+  console.log(`Changed files: ${changeResult.files.length}`);
+  console.log(`Merly evidence: ${report.summary.merly_status}`);
+  console.log(`Skipped checks: ${skippedChecks.length}`);
+
+  if (options.dryRun) {
+    console.log("");
+    console.log(`Dry run: reports were not written. Planned JSON report: ${output.displayJsonPath}`);
+    console.log(`Dry run: planned Markdown report: ${output.displayMarkdownPath}`);
+    return;
+  }
+
+  const written = writeSpecReports(report, output);
+  console.log("");
+  console.log(`Wrote JSON report: ${written.paths.json}`);
+  console.log(`Wrote Markdown report: ${written.paths.markdown}`);
 }
 
 function runSpecReport(argv) {
   const options = parseOptions(argv);
   if (options.help) return printSpecReportHelp();
 
-  printSpecPlan("Spec Report", options, [
-    "Read a prior spec verification result.",
-    "Render human-readable Markdown and machine-readable JSON.",
-    "Summarize skipped checks and next actions.",
-  ]);
+  const inputPath = options.input || options._[0];
+  if (!inputPath) {
+    throw new CliError("--input is required for spec report.");
+  }
+
+  let report;
+  try {
+    report = readSpecReport(inputPath, { baseDir: process.cwd() });
+  } catch (error) {
+    throw new CliError(`Could not read spec report: ${error.message}`, 1, "Use a JSON report created by `merly-easy spec verify`.");
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  const markdown = renderSpecReportMarkdown(report);
+  if (options.output) {
+    const outputPath = path.resolve(process.cwd(), options.output);
+    if (options.dryRun) {
+      console.log(`Spec Report (dry run)`);
+      console.log("");
+      console.log(`Input: ${inputPath}`);
+      console.log(`Planned Markdown output: ${options.output}`);
+      console.log("No files were written.");
+      return;
+    }
+
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, markdown, "utf8");
+    console.log(`Wrote Markdown report: ${options.output}`);
+    return;
+  }
+
+  process.stdout.write(markdown);
+}
+
+function collectSpecMerlyEvidence({ dryRun }) {
+  if (dryRun) {
+    return {
+      merlyEvidence: { status: "skipped", checks: [] },
+      skippedChecks: [
+        {
+          name: "merly_health_auth",
+          reason: "Dry run skipped Merly health and auth-status checks.",
+        },
+      ],
+    };
+  }
+
+  const mock = process.env.MERLY_EASY_SPEC_MOCK || "";
+  if (mock) return mockSpecMerlyEvidence(mock);
+
+  const context = buildAuthContext({});
+  const checks = [];
+  const authStatus = runJsonCommand({
+    command: process.execPath,
+    args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "auth-status"],
+    cwd: context.mcpServerRoot,
+    env: buildAuthCommandEnv(context),
+  });
+
+  checks.push(authStatus.ok
+    ? { status: "pass", name: "merly_auth_status", detail: summarizeAuthStatus(authStatus.payload) }
+    : { status: "fail", name: "merly_auth_status", detail: authStatus.error });
+
+  const health = runJsonCommand({
+    command: process.execPath,
+    args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "health"],
+    cwd: context.mcpServerRoot,
+    env: buildAuthCommandEnv(context),
+  });
+
+  checks.push(health.ok
+    ? { status: "pass", name: "merly_health", detail: summarizeHealth(health.payload) }
+    : { status: "fail", name: "merly_health", detail: health.error });
+
+  return {
+    merlyEvidence: {
+      status: checks.some((check) => check.status === "fail") ? "failed" : "available",
+      checks,
+    },
+    skippedChecks: [],
+  };
+}
+
+function mockSpecMerlyEvidence(mock) {
+  if (mock === "healthy") {
+    return {
+      merlyEvidence: {
+        status: "available",
+        checks: [
+          { name: "merly_auth_status", status: "pass", detail: `base_url=${DEFAULT_MERLY_BASE_URL}; mentor=api_key; dif=dif_api_key` },
+          { name: "merly_health", status: "pass", detail: "api=ok; daemon=ok; version=mock" },
+        ],
+      },
+      skippedChecks: [],
+    };
+  }
+
+  if (mock === "missing") {
+    return {
+      merlyEvidence: {
+        status: "failed",
+        checks: [
+          { name: "merly_auth_status", status: "pass", detail: `base_url=${DEFAULT_MERLY_BASE_URL}; mentor=none; dif=none` },
+          { name: "merly_health", status: "fail", detail: "Merly Bridge API is not reachable." },
+        ],
+      },
+      skippedChecks: [],
+    };
+  }
+
+  return {
+    merlyEvidence: {
+      status: "failed",
+      checks: [
+        { name: "merly_spec_mock", status: "fail", detail: `Unknown spec mock mode: ${mock}` },
+      ],
+    },
+    skippedChecks: [],
+  };
+}
+
+function buildSpecVerificationSkippedChecks(changedFiles) {
+  return [
+    {
+      name: "requirement_to_file_mapping",
+      reason: "The report records extracted requirements and changed files, but does not yet map each requirement to implementation files.",
+    },
+    {
+      name: "merly_dif_verification",
+      reason: changedFiles.length > 0
+        ? "DIF verification is not run from this report slice because requirement-to-file mapping is not implemented yet."
+        : "No changed files were collected for DIF verification.",
+    },
+    {
+      name: "semantic_compliance_proof",
+      reason: "Spec adapters extract requirement-like items only; this command does not prove semantic implementation compliance.",
+    },
+  ];
 }
 
 function printSpecPlan(title, options, steps) {
@@ -319,8 +494,8 @@ Notes:
 function printSpecHelp() {
   console.log(`Usage:
   merly-easy spec preflight --spec <file> [--json] [--dry-run]
-  merly-easy spec verify --spec <file> [--changed] [--json] [--dry-run]
-  merly-easy spec report --input <file> [--dry-run]`);
+  merly-easy spec verify --spec <file> [--changed] [--output-dir <path>] [--json] [--dry-run]
+  merly-easy spec report --input <file> [--output <file>] [--json] [--dry-run]`);
 }
 
 function printSpecPreflightHelp() {
@@ -328,11 +503,11 @@ function printSpecPreflightHelp() {
 }
 
 function printSpecVerifyHelp() {
-  console.log("Usage: merly-easy spec verify --spec <file> [--changed] [--json] [--report-format markdown,json] [--dry-run]");
+  console.log("Usage: merly-easy spec verify --spec <file> [--changed] [--output-dir <path>] [--output-name <name>] [--json] [--dry-run]");
 }
 
 function printSpecReportHelp() {
-  console.log("Usage: merly-easy spec report --input <file> [--format markdown,json] [--dry-run]");
+  console.log("Usage: merly-easy spec report --input <file> [--output <file>] [--json] [--dry-run]");
 }
 
 function existsLabel(filePath) {

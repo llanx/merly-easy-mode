@@ -94,14 +94,8 @@ npm run setup -- --client claude --dry-run
 npm run merly -- doctor
 npm run merly -- auth
 npm run merly -- spec preflight --spec fixtures/specs/markdown-basic.md
+npm run merly -- spec verify --spec fixtures/specs/markdown-basic.md --changed
+npm run merly -- spec report --input .merly-local/spec-reports/markdown-basic-spec-report.json
 npm run mcp:smoke
 npm run check:public-clean
 ```
-
-Planned:
-
-```powershell
-npm run merly -- spec verify --spec <spec-file> --changed
-```
-
-The planned commands are part of the Merly Easy Mode roadmap and should be implemented through the public CLI.

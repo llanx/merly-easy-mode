@@ -169,12 +169,12 @@ const cases = [
   {
     name: "spec verify dry-run",
     args: ["spec", "verify", "--spec", "fixtures/specs/gherkin-basic.feature", "--changed", "--dry-run"],
-    includes: ["Spec Verify (dry run)", "Adapter: Gherkin (gherkin)", "Extracted requirements: 5", "Merly evidence: not run"],
+    includes: ["Spec Verify (dry run)", "Adapter: Gherkin (gherkin)", "Extracted requirements: 5", "Merly evidence: skipped", "reports were not written"],
   },
   {
-    name: "spec report dry-run",
-    args: ["spec", "report", "--input", ".merly-local/spec-report.json", "--dry-run"],
-    includes: ["Spec Report (dry run)", "Read a prior spec verification result"],
+    name: "spec report help",
+    args: ["spec", "report", "--help"],
+    includes: ["Usage: merly-easy spec report --input <file>", "--output <file>", "--json"],
   },
 ];
 

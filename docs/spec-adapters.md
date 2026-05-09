@@ -28,13 +28,26 @@ Return structured JSON:
 npm run merly -- spec preflight --spec fixtures/specs/openapi-basic.json --json
 ```
 
-Run the current verification scaffold with extracted requirements:
+Write verification reports with extracted requirements, changed-file scope, Merly health/auth evidence, and skipped-check notes:
 
 ```powershell
-npm run merly -- spec verify --spec fixtures/specs/gherkin-basic.feature --changed --dry-run
+npm run merly -- spec verify --spec fixtures/specs/gherkin-basic.feature --changed
 ```
 
-`spec verify` currently extracts requirements and reports that Merly evidence is not run in this adapter slice. Report generation and Merly evidence mapping are handled by later spec verification work.
+By default, `spec verify` writes:
+
+- JSON report: `.merly-local/spec-reports/<spec-name>-spec-report.json`
+- Markdown report: `.merly-local/spec-reports/<spec-name>-spec-report.md`
+
+Use `--output-dir <path>` and `--output-name <name>` to choose a different report location. Use `--dry-run` to preview the report paths without writing files.
+
+Render a prior JSON report as Markdown:
+
+```powershell
+npm run merly -- spec report --input .merly-local/spec-reports/gherkin-basic-spec-report.json
+```
+
+`spec verify` is intentionally advisory. It records extracted requirements, changed files when `--changed` is supplied, Merly health/auth evidence when available, and skipped checks for verification work that is not yet automated.
 
 ## Output Shape
 
@@ -62,3 +75,18 @@ Example:
   "metadata": {}
 }
 ```
+
+## Report Shape
+
+The JSON report includes:
+
+- `schema_version`
+- `summary`
+- `inputs`
+- `extraction`
+- `changed_files`
+- `merly_evidence`
+- `skipped_checks`
+- `outputs`
+
+The Markdown report includes the same information in a human-readable format for task handoffs and review.
