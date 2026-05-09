@@ -44,7 +44,13 @@ Do not ask the user to paste API keys, account passwords, or bearer tokens into 
 npm run setup -- --client codex --dry-run
 ```
 
-Do not write user-level Codex config without explicit approval. If config changes require a Codex restart, say so and stop at the restart checkpoint.
+Do not write user-level Codex config without explicit approval. If the user approves the target path and proposed config, apply it with:
+
+```powershell
+npm run setup -- --client codex --write --confirm-write
+```
+
+The setup command backs up an existing config before changing it. If config changes require a Codex restart, say so and stop at the restart checkpoint.
 
 5. After Codex can see the MCP server, call `merly_health` and report whether it succeeded.
 

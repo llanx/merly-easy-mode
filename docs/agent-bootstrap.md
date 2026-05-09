@@ -18,6 +18,15 @@ npm run merly -- bootstrap status --client claude --json
 
 If `needs_bootstrap` is `true`, the agent asks whether to walk through setup. If the user approves, the agent runs Easy Mode and stops before writing credentials, user-level config, repository registrations, or commits unless the user explicitly approves that action.
 
+When the user approves user-level agent config changes, the agent can apply the generated MCP config with:
+
+```powershell
+npm run setup -- --client codex --write --confirm-write
+npm run setup -- --client claude --write --confirm-write
+```
+
+The write path backs up an existing config file before changing it and updates only the `merly` MCP server entry.
+
 ## Status Command
 
 The status command checks local bootstrap state and the files needed for agent setup:

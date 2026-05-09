@@ -83,6 +83,15 @@ npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
 ```
 
+After reviewing the target path and proposed config, apply it with an explicit confirmation flag:
+
+```powershell
+npm run setup -- --client codex --write --confirm-write
+npm run setup -- --client claude --write --confirm-write
+```
+
+The setup command backs up an existing config file before it changes the `merly` MCP entry. It does not write credentials.
+
 Use [docs/codex-config-example.md](docs/codex-config-example.md) for Codex or [docs/claude-config-example.md](docs/claude-config-example.md) for Claude. Replace `<checkout>` with your local repository path when using the static examples.
 
 After the agent can see the MCP server, ask it to inspect the repository with Merly, choose one safe issue, run validation, and verify the change.
@@ -96,6 +105,7 @@ npm run easy -- --client codex
 npm run easy -- --client claude --dry-run
 npm run merly -- bootstrap status --client codex --json
 npm run setup -- --client codex --dry-run
+npm run setup -- --client codex --write --confirm-write
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor
 npm run merly -- auth

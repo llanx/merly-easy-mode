@@ -12,8 +12,26 @@ const uiAuthEnv = path.join(authTempDir, "ui.env");
 const advancedAuthEnv = path.join(authTempDir, "advanced.env");
 const firstRunState = path.join(authTempDir, "missing-bootstrap-state.json");
 const easyState = path.join(authTempDir, "easy-bootstrap-state.json");
+const codexWriteConfig = path.join(authTempDir, "codex-write.toml");
+const codexUnconfirmedConfig = path.join(authTempDir, "codex-unconfirmed.toml");
+const claudeWriteConfig = path.join(authTempDir, "claude-write.json");
 
 fs.rmSync(authTempDir, { recursive: true, force: true });
+fs.mkdirSync(authTempDir, { recursive: true });
+fs.writeFileSync(codexWriteConfig, "model = \"gpt-5\"\n\n[features]\nagent = true\n", "utf8");
+fs.writeFileSync(
+  claudeWriteConfig,
+  `${JSON.stringify({
+    theme: "dark",
+    mcpServers: {
+      existing: {
+        command: "node",
+        args: ["existing.js"],
+      },
+    },
+  }, null, 2)}\n`,
+  "utf8",
+);
 
 const cases = [
   {
@@ -87,13 +105,36 @@ const cases = [
     name: "codex setup dry-run",
     args: ["setup", "--client", "codex", "--dry-run"],
     env: { MERLY_EASY_CODEX_CONFIG: path.join(repoRoot, ".tmp", "codex.toml") },
-    includes: ["Codex Setup (dry run)", "Agent pack: agent-packs/codex", "[mcp_servers.merly]", "Target config:", "No files were written"],
+    includes: ["Codex Setup (dry run)", "Agent pack: agent-packs/codex", "[mcp_servers.merly]", "Target config:", "No files were written", "--write --confirm-write"],
+  },
+  {
+    name: "codex setup write requires confirmation",
+    args: ["setup", "--client", "codex", "--target", codexUnconfirmedConfig, "--write"],
+    status: 1,
+    includes: ["Codex Setup (dry run)", "No files were written"],
+    stderrIncludes: ["Setup writes require --confirm-write"],
+  },
+  {
+    name: "codex setup write merges config",
+    args: ["setup", "--client", "codex", "--target", codexWriteConfig, "--write", "--confirm-write"],
+    includes: ["Codex Setup (applied)", "Action: updated existing config", "Backup:", "No secrets were written", "Validation after setup: codex mcp get merly"],
+  },
+  {
+    name: "setup write refuses public repo target",
+    args: ["setup", "--client", "codex", "--target", "README.md", "--write", "--confirm-write"],
+    status: 1,
+    stderrIncludes: ["Refusing to write agent config inside the repository outside .merly-local"],
   },
   {
     name: "claude setup dry-run",
     args: ["setup", "--client", "claude", "--dry-run"],
     env: { MERLY_EASY_CLAUDE_CONFIG: path.join(repoRoot, ".tmp", "claude.json") },
-    includes: ["Claude Setup (dry run)", "Agent pack: agent-packs/claude", "\"mcpServers\"", "\"merly\"", "Target config:", "No files were written"],
+    includes: ["Claude Setup (dry run)", "Agent pack: agent-packs/claude", "\"mcpServers\"", "\"merly\"", "Target config:", "No files were written", "--write --confirm-write"],
+  },
+  {
+    name: "claude setup write merges config",
+    args: ["setup", "--client", "claude", "--target", claudeWriteConfig, "--write", "--confirm-write"],
+    includes: ["Claude Setup (applied)", "Action: updated existing config", "Backup:", "No secrets were written", "Restart Claude"],
   },
   {
     name: "doctor dry-run",
@@ -219,6 +260,18 @@ assert.doesNotMatch(advancedEnvContent, /MERLY_PASSWORD|MERLY_EMAIL|MERLY_BEARER
 const easyStateContent = JSON.parse(fs.readFileSync(easyState, "utf8"));
 assert.equal(easyStateContent.schema_version, "merly-easy.bootstrap-state.v1");
 assert.equal(easyStateContent.client, "codex");
+const codexWriteContent = fs.readFileSync(codexWriteConfig, "utf8");
+assert.match(codexWriteContent, /model = "gpt-5"/);
+assert.match(codexWriteContent, /\[features\]\nagent = true/);
+assert.match(codexWriteContent, /\[mcp_servers\.merly\]/);
+assert.equal(fs.existsSync(codexUnconfirmedConfig), false, "unconfirmed setup write should not create config");
+const claudeWriteContent = JSON.parse(fs.readFileSync(claudeWriteConfig, "utf8"));
+assert.equal(claudeWriteContent.theme, "dark");
+assert.equal(claudeWriteContent.mcpServers.existing.command, "node");
+assert.equal(claudeWriteContent.mcpServers.merly.command, "node");
+assert.equal(Array.isArray(claudeWriteContent.mcpServers.merly.args), true);
+assert.ok(hasBackupFor(codexWriteConfig), "codex setup write should create a backup");
+assert.ok(hasBackupFor(claudeWriteConfig), "claude setup write should create a backup");
 fs.rmSync(authTempDir, { recursive: true, force: true });
 
 console.log(`CLI smoke passed (${cases.length + 1} cases).`);
@@ -233,4 +286,9 @@ function runCli(args, env = {}) {
 
 function literalPattern(text) {
   return new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+}
+
+function hasBackupFor(targetPath) {
+  const baseName = path.basename(targetPath);
+  return fs.readdirSync(path.dirname(targetPath)).some((entry) => entry.startsWith(`${baseName}.merly-easy-backup-`));
 }

@@ -29,6 +29,7 @@ If Merly is not running locally, `npm run smoke` and `npm run release:check` can
 - Confirm `npm run merly -- bootstrap status --client codex --json` is read-only and reports whether first-run setup is needed.
 - Confirm `npm run setup -- --client codex --dry-run` prints a usable config proposal and does not write user-level config.
 - Confirm `npm run setup -- --client claude --dry-run` prints a usable config proposal and does not write user-level config.
+- Confirm `npm run setup -- --client codex --write --confirm-write --target .merly-local/release-codex.toml` creates or updates only an ignored local test config and makes a backup when replacing existing config.
 - Confirm `npm run merly -- auth --flow ui --dry-run` explains the UI-created key path without reading secrets.
 - Confirm `npm run merly -- spec verify --spec fixtures/specs/markdown-basic.md --changed --dry-run` explains planned report paths.
 

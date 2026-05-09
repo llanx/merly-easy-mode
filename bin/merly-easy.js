@@ -97,7 +97,12 @@ function runSetup(argv) {
     throw new CliError(`Unsupported client: ${client}`, 1, "Supported clients: codex, claude.");
   }
 
-  printSetupProposal(buildSetupProposal(client, options), options);
+  const proposal = buildSetupProposal(client, options);
+  if (options.write && !options.dryRun) {
+    return writeSetupProposal(proposal, options);
+  }
+
+  printSetupProposal(proposal, options);
 }
 
 function runDoctor(argv) {
@@ -495,6 +500,8 @@ function parseOptions(argv) {
       options.open = true;
     } else if (arg === "--confirm-advanced") {
       options.confirmAdvanced = true;
+    } else if (arg === "--confirm-write") {
+      options.confirmWrite = true;
     } else if (arg === "--skip-verify") {
       options.skipVerify = true;
     } else if (arg === "--from-env") {
@@ -536,7 +543,7 @@ function printGlobalHelp() {
 Usage:
   merly-easy easy [--client <codex|claude>] [--register-repo] [--dry-run]
   merly-easy bootstrap status [--client <codex|claude>] [--json]
-  merly-easy setup --client <codex|claude> [--dry-run]
+  merly-easy setup --client <codex|claude> [--write --confirm-write] [--dry-run]
   merly-easy doctor [--platform <win32|darwin|linux>] [--dry-run]
   merly-easy auth [--flow <ui|advanced>] [--write] [--dry-run]
   merly-easy spec <preflight|verify|report> [options]
@@ -556,7 +563,7 @@ function printEasyHelp() {
 }
 
 function printSetupHelp() {
-  console.log("Usage: merly-easy setup --client <codex|claude> [--target <path>] [--dry-run]");
+  console.log("Usage: merly-easy setup --client <codex|claude> [--target <path>] [--write --confirm-write] [--dry-run]");
 }
 
 function printDoctorHelp() {
@@ -1486,6 +1493,10 @@ function isPathInside(candidate, parent) {
   return relative === "" || (relative && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function buildSetupProposal(client, options) {
   const repoRoot = path.resolve(__dirname, "..");
   const mcpServerRoot = path.join(repoRoot, "mcp-server");
@@ -1534,7 +1545,33 @@ function printSetupProposal(proposal, options) {
   console.log("```");
   console.log("");
   console.log("No files were written.");
-  console.log("Future interactive setup will ask before writing any user-level agent config file.");
+  console.log(`To apply this config, rerun with: npm run setup -- --client ${proposal.client} --write --confirm-write`);
+  console.log(`Validation after setup: ${proposal.nextCommand}`);
+}
+
+function writeSetupProposal(proposal, options) {
+  if (!options.confirmWrite) {
+    printSetupProposal(proposal, { ...options, dryRun: true });
+    throw new CliError(
+      "Setup writes require --confirm-write.",
+      1,
+      "Review the proposed config first, then rerun with --write --confirm-write if the target path is correct.",
+    );
+  }
+
+  assertSetupAssetsExist(proposal);
+  assertWritableSetupTarget(proposal.targetPath, path.resolve(__dirname, ".."));
+
+  const result = proposal.client === "codex"
+    ? writeCodexSetupConfig(proposal)
+    : writeClaudeSetupConfig(proposal);
+
+  console.log(`${proposal.title} (applied)`);
+  console.log("");
+  console.log(`Target config: ${proposal.targetPath}`);
+  console.log(`Action: ${result.action}`);
+  console.log(result.backupPath ? `Backup: ${result.backupPath}` : "Backup: not needed");
+  console.log("No secrets were written.");
   console.log(`Validation after setup: ${proposal.nextCommand}`);
 }
 
@@ -1587,6 +1624,127 @@ function renderClaudeConfig({ serverPath, mcpServerRoot }) {
     null,
     2,
   );
+}
+
+function writeCodexSetupConfig(proposal) {
+  const existing = fs.existsSync(proposal.targetPath) ? fs.readFileSync(proposal.targetPath, "utf8") : "";
+  const next = upsertTomlSection(existing, "mcp_servers.merly", proposal.config);
+  return writeTextConfigIfChanged(proposal.targetPath, existing, next);
+}
+
+function writeClaudeSetupConfig(proposal) {
+  let existingConfig = {};
+  const existing = fs.existsSync(proposal.targetPath) ? fs.readFileSync(proposal.targetPath, "utf8") : "";
+
+  if (existing.trim()) {
+    try {
+      existingConfig = JSON.parse(existing);
+    } catch (error) {
+      throw new CliError(
+        `Could not parse Claude config JSON: ${error.message}`,
+        1,
+        "Fix the existing JSON or choose a different --target before rerunning setup --write.",
+      );
+    }
+
+    if (!existingConfig || typeof existingConfig !== "object" || Array.isArray(existingConfig)) {
+      throw new CliError("Claude config must be a JSON object.", 1, "Choose a valid Claude config file or a new --target path.");
+    }
+  }
+
+  const merlyConfig = JSON.parse(proposal.config).mcpServers.merly;
+  const nextConfig = {
+    ...existingConfig,
+    mcpServers: {
+      ...(existingConfig.mcpServers && typeof existingConfig.mcpServers === "object" && !Array.isArray(existingConfig.mcpServers)
+        ? existingConfig.mcpServers
+        : {}),
+      merly: merlyConfig,
+    },
+  };
+  const next = `${JSON.stringify(nextConfig, null, 2)}\n`;
+  return writeTextConfigIfChanged(proposal.targetPath, existing, next);
+}
+
+function upsertTomlSection(content, sectionName, sectionContent) {
+  const normalizedSection = `${sectionContent.trim()}\n`;
+  const lines = content ? content.split(/\r?\n/) : [];
+  const headerPattern = new RegExp(`^\\s*\\[${escapeRegExp(sectionName)}\\]\\s*$`);
+  const anyHeaderPattern = /^\s*\[[^\]]+\]\s*$/;
+  const start = lines.findIndex((line) => headerPattern.test(line));
+
+  if (start === -1) {
+    const prefix = content.trimEnd();
+    return prefix ? `${prefix}\n\n${normalizedSection}` : normalizedSection;
+  }
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (anyHeaderPattern.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+
+  const before = lines.slice(0, start).join("\n").trimEnd();
+  const after = lines.slice(end).join("\n").trimStart();
+  return [
+    before,
+    normalizedSection.trimEnd(),
+    after,
+  ].filter(Boolean).join("\n\n") + "\n";
+}
+
+function writeTextConfigIfChanged(targetPath, existing, next) {
+  if (existing === next) {
+    return { action: "already up to date", backupPath: "" };
+  }
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const backupPath = fs.existsSync(targetPath) ? createConfigBackup(targetPath) : "";
+  fs.writeFileSync(targetPath, next, "utf8");
+  return { action: backupPath ? "updated existing config" : "created config", backupPath };
+}
+
+function createConfigBackup(targetPath) {
+  const backupPath = nextBackupPath(targetPath);
+  fs.copyFileSync(targetPath, backupPath);
+  return backupPath;
+}
+
+function nextBackupPath(targetPath) {
+  const parsed = path.parse(targetPath);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  let candidate = path.join(parsed.dir, `${parsed.base}.merly-easy-backup-${stamp}`);
+  let suffix = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(parsed.dir, `${parsed.base}.merly-easy-backup-${stamp}-${suffix}`);
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function assertSetupAssetsExist(proposal) {
+  if (!fs.existsSync(proposal.serverPath)) {
+    throw new CliError(`MCP server entrypoint not found: ${proposal.serverPath}`, 1, "Run setup from a complete repository checkout.");
+  }
+
+  if (!fs.existsSync(proposal.mcpServerRoot)) {
+    throw new CliError(`MCP server directory not found: ${proposal.mcpServerRoot}`, 1, "Run setup from a complete repository checkout.");
+  }
+}
+
+function assertWritableSetupTarget(targetPath, repoRoot) {
+  const resolved = path.resolve(targetPath);
+  const localDir = path.resolve(repoRoot, ".merly-local");
+
+  if (isPathInside(resolved, repoRoot) && !isPathInside(resolved, localDir)) {
+    throw new CliError(
+      `Refusing to write agent config inside the repository outside .merly-local: ${resolved}`,
+      1,
+      "Use the default user-level config path or an ignored .merly-local target for tests.",
+    );
+  }
 }
 
 function tomlString(value) {

@@ -10,6 +10,14 @@ npm run setup -- --client claude --dry-run
 
 The command prints the detected MCP server path, the expected user-level config path, and the JSON block to add.
 
+After reviewing the target path and proposal, apply it with:
+
+```powershell
+npm run setup -- --client claude --write --confirm-write
+```
+
+The write path backs up an existing config file and updates only the `mcpServers.merly` entry. It does not write credentials.
+
 Use absolute paths for your checkout:
 
 ```json

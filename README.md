@@ -60,6 +60,7 @@ npm run easy -- --dry-run
 npm run merly -- bootstrap status --client codex --json
 npm run easy -- --client codex
 npm run setup -- --client codex --dry-run
+npm run setup -- --client codex --write --confirm-write
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor
 npm run merly -- auth --flow ui --dry-run

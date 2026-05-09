@@ -10,6 +10,14 @@ npm run setup -- --client codex --dry-run
 
 The command prints the detected MCP server path, the expected user-level config path, and the TOML block to add.
 
+After reviewing the target path and proposal, apply it with:
+
+```powershell
+npm run setup -- --client codex --write --confirm-write
+```
+
+The write path backs up an existing config file and updates only the `[mcp_servers.merly]` section. It does not write credentials.
+
 Use absolute paths for your checkout:
 
 ```toml
