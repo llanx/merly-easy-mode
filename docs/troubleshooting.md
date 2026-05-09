@@ -24,6 +24,7 @@ The CLI scaffold should run without Merly:
 npm run merly -- --help
 npm run easy -- --dry-run
 npm run setup -- --client codex --dry-run
+npm run merly -- doctor
 ```
 
 ## Credentials Are Missing

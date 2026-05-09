@@ -66,6 +66,7 @@ Current:
 npm run easy -- --dry-run
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
+npm run merly -- doctor
 npm run mcp:smoke
 npm run check:public-clean
 ```

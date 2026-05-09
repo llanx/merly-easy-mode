@@ -31,7 +31,20 @@ const cases = [
   {
     name: "doctor dry-run",
     args: ["doctor", "--dry-run"],
-    includes: ["Merly Doctor (dry run)", "Node runtime", "MCP server entrypoint"],
+    includes: ["Merly Doctor (dry run)", "node:", "mcp_server_entrypoint", "Dry run skipped"],
+  },
+  {
+    name: "doctor healthy mock",
+    args: ["doctor"],
+    env: { MERLY_EASY_DOCTOR_MOCK: "healthy" },
+    includes: ["Merly Doctor", "merly_health: api=ok", "mcp_tool_smoke: tools=23", "Doctor completed without blockers"],
+  },
+  {
+    name: "doctor missing mock",
+    args: ["doctor"],
+    env: { MERLY_EASY_DOCTOR_MOCK: "missing" },
+    status: 1,
+    includes: ["Merly Doctor", "merly_health: Merly Bridge API is not reachable", "Doctor found blockers"],
   },
   {
     name: "auth dry-run",
@@ -56,8 +69,8 @@ const cases = [
 ];
 
 for (const testCase of cases) {
-  const result = runCli(testCase.args);
-  assert.equal(result.status, 0, `${testCase.name} exited ${result.status}\n${result.stderr}`);
+  const result = runCli(testCase.args, testCase.env);
+  assert.equal(result.status, testCase.status ?? 0, `${testCase.name} exited ${result.status}\n${result.stderr}`);
   for (const text of testCase.includes) {
     assert.match(result.stdout, literalPattern(text), `${testCase.name} missing ${text}\n${result.stdout}`);
   }
@@ -69,10 +82,11 @@ assert.match(invalidClient.stderr, /Unsupported client: other/);
 
 console.log(`CLI smoke passed (${cases.length + 1} cases).`);
 
-function runCli(args) {
+function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
     cwd: repoRoot,
     encoding: "utf8",
+    env: { ...process.env, ...env },
   });
 }
 

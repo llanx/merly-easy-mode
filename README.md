@@ -40,6 +40,7 @@ The public CLI entrypoint is `merly-easy`. During local development, use npm wra
 npm run easy -- --dry-run
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
+npm run merly -- doctor
 npm run merly -- spec preflight --spec <spec-file> --dry-run
 ```
 

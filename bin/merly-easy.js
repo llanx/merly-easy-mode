@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const process = require("node:process");
+const { spawnSync } = require("node:child_process");
 
 const VERSION = "0.1.0";
 const CLIENTS = new Set(["codex", "claude"]);
@@ -100,23 +101,20 @@ function runDoctor(argv) {
   const options = parseOptions(argv);
   if (options.help) return printDoctorHelp();
 
-  const repoRoot = path.resolve(__dirname, "..");
-  const mcpServerPath = path.join(repoRoot, "mcp-server", "src", "server.js");
-  const envPath = path.join(repoRoot, "mcp-server", ".env");
-
-  printPlan({
-    title: "Merly Doctor",
+  const diagnostics = collectDoctorDiagnostics({
     dryRun: options.dryRun,
-    steps: [
-      `Node runtime: ${process.version}`,
-      `Platform: ${process.platform}`,
-      `Repository root: ${repoRoot}`,
-      `MCP server entrypoint: ${existsLabel(mcpServerPath)}`,
-      `Local env file: ${existsLabel(envPath)}`,
-      "Merly bridge health, auth status, and MCP tool availability checks are planned for the diagnostics slice.",
-    ],
-    next: "Run npm run mcp:smoke for the current live MCP smoke check.",
+    mock: process.env.MERLY_EASY_DOCTOR_MOCK || "",
   });
+  const failed = diagnostics.checks.filter((check) => check.status === "fail");
+  const warned = diagnostics.checks.filter((check) => check.status === "warn");
+
+  printDoctorReport(diagnostics);
+
+  if (!options.dryRun && failed.length > 0) {
+    process.exitCode = 1;
+  } else if (!options.dryRun && warned.length > 0) {
+    process.exitCode = 0;
+  }
 }
 
 function runAuth(argv) {
@@ -226,6 +224,8 @@ function parseOptions(argv) {
       options.dryRun = true;
     } else if (arg === "--changed") {
       options.changed = true;
+    } else if (arg === "--json") {
+      options.json = true;
     } else if (arg.startsWith("--")) {
       const key = toCamelCase(arg.slice(2));
       const next = argv[index + 1];
@@ -304,6 +304,210 @@ function printSpecReportHelp() {
 
 function existsLabel(filePath) {
   return `${fs.existsSync(filePath) ? "found" : "missing"} (${filePath})`;
+}
+
+function collectDoctorDiagnostics({ dryRun, mock }) {
+  const repoRoot = path.resolve(__dirname, "..");
+  const mcpServerRoot = path.join(repoRoot, "mcp-server");
+  const mcpServerPath = path.join(mcpServerRoot, "src", "server.js");
+  const envPath = path.join(mcpServerRoot, ".env");
+  const checks = [
+    {
+      name: "node",
+      status: satisfiesNodeMajor(20) ? "pass" : "fail",
+      detail: `${process.version} on ${process.platform}`,
+    },
+    {
+      name: "git_workspace",
+      ...gitWorkspaceCheck(repoRoot),
+    },
+    {
+      name: "mcp_server_entrypoint",
+      status: fs.existsSync(mcpServerPath) ? "pass" : "fail",
+      detail: mcpServerPath,
+    },
+    {
+      name: "local_env",
+      status: fs.existsSync(envPath) ? "pass" : "warn",
+      detail: fs.existsSync(envPath) ? envPath : "mcp-server/.env not found; copy .env.example when credentials are needed.",
+    },
+  ];
+
+  if (dryRun) {
+    checks.push({
+      name: "external_checks",
+      status: "skip",
+      detail: "Dry run skipped Merly health, auth-status, and MCP smoke checks.",
+    });
+    return { repoRoot, dryRun, checks };
+  }
+
+  if (mock) {
+    checks.push(...mockDoctorChecks(mock));
+    return { repoRoot, dryRun, checks };
+  }
+
+  checks.push(
+    commandCheck({
+      name: "merly_auth_status",
+      command: process.execPath,
+      args: [path.join(mcpServerRoot, "scripts", "merly-debug.js"), "auth-status"],
+      cwd: mcpServerRoot,
+      summarize: summarizeAuthStatus,
+    }),
+  );
+
+  checks.push(
+    commandCheck({
+      name: "merly_health",
+      command: process.execPath,
+      args: [path.join(mcpServerRoot, "scripts", "merly-debug.js"), "health"],
+      cwd: mcpServerRoot,
+      summarize: summarizeHealth,
+    }),
+  );
+
+  checks.push(
+    commandCheck({
+      name: "mcp_tool_smoke",
+      command: process.execPath,
+      args: [path.join(mcpServerRoot, "scripts", "mcp-smoke.js")],
+      cwd: mcpServerRoot,
+      summarize: summarizeMcpSmoke,
+    }),
+  );
+
+  return { repoRoot, dryRun, checks };
+}
+
+function printDoctorReport(diagnostics) {
+  console.log(`Merly Doctor${diagnostics.dryRun ? " (dry run)" : ""}`);
+  console.log("");
+  console.log(`Repository root: ${diagnostics.repoRoot}`);
+  console.log("");
+
+  for (const check of diagnostics.checks) {
+    console.log(`${statusIcon(check.status)} ${check.name}: ${check.detail}`);
+  }
+
+  const failed = diagnostics.checks.filter((check) => check.status === "fail");
+  console.log("");
+  if (failed.length > 0) {
+    console.log("Doctor found blockers. Fix failed checks before running Easy Mode.");
+  } else {
+    console.log("Doctor completed without blockers.");
+  }
+}
+
+function commandCheck({ name, command, args, cwd, summarize }) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    env: process.env,
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    return {
+      name,
+      status: "fail",
+      detail: firstUsefulLine(result.stderr || result.stdout) || `Exited with status ${result.status}.`,
+    };
+  }
+
+  try {
+    return {
+      name,
+      status: "pass",
+      detail: summarize(JSON.parse(result.stdout)),
+    };
+  } catch (error) {
+    return {
+      name,
+      status: "warn",
+      detail: `Command succeeded, but output could not be summarized: ${error.message}`,
+    };
+  }
+}
+
+function summarizeAuthStatus(payload) {
+  const mentor = payload.mentor_auth_mode || "none";
+  const dif = payload.dif_auth_mode || "none";
+  return `base_url=${payload.base_url}; mentor=${mentor}; dif=${dif}`;
+}
+
+function summarizeHealth(payload) {
+  const api = payload.health?.status || "unknown";
+  const daemon = payload.health?.daemon || payload.health?.daemon_status?.state || "unknown";
+  const version = payload.health?.version || payload.status?.version || "unknown";
+  return `api=${api}; daemon=${daemon}; version=${version}`;
+}
+
+function summarizeMcpSmoke(payload) {
+  const tools = Array.isArray(payload.tools) ? payload.tools.length : 0;
+  const api = payload.health?.api_health || "unknown";
+  const daemon = payload.health?.daemon || "unknown";
+  return `tools=${tools}; api=${api}; daemon=${daemon}`;
+}
+
+function mockDoctorChecks(mock) {
+  if (mock === "healthy") {
+    return [
+      { name: "merly_auth_status", status: "pass", detail: "base_url=http://127.0.0.1:4201; mentor=api_key; dif=dif_api_key" },
+      { name: "merly_health", status: "pass", detail: "api=ok; daemon=ok; version=mock" },
+      { name: "mcp_tool_smoke", status: "pass", detail: "tools=23; api=ok; daemon=ok" },
+    ];
+  }
+
+  if (mock === "missing") {
+    return [
+      { name: "merly_auth_status", status: "pass", detail: "base_url=http://127.0.0.1:4201; mentor=none; dif=none" },
+      { name: "merly_health", status: "fail", detail: "Merly Bridge API is not reachable." },
+      { name: "mcp_tool_smoke", status: "fail", detail: "MCP smoke could not call merly_health." },
+    ];
+  }
+
+  return [{ name: "doctor_mock", status: "warn", detail: `Unknown mock mode: ${mock}` }];
+}
+
+function gitWorkspaceCheck(repoRoot) {
+  const result = spawnSync("git", ["-C", repoRoot, "rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    return { status: "warn", detail: "Not running inside a Git workspace." };
+  }
+
+  return { status: "pass", detail: result.stdout.trim() };
+}
+
+function satisfiesNodeMajor(minMajor) {
+  const major = Number(process.versions.node.split(".")[0]);
+  return Number.isFinite(major) && major >= minMajor;
+}
+
+function statusIcon(status) {
+  switch (status) {
+    case "pass":
+      return "PASS";
+    case "fail":
+      return "FAIL";
+    case "warn":
+      return "WARN";
+    case "skip":
+      return "SKIP";
+    default:
+      return "INFO";
+  }
+}
+
+function firstUsefulLine(value) {
+  return String(value)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 function toCamelCase(value) {
