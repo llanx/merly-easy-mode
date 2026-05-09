@@ -2,6 +2,14 @@
 
 Example local Codex config for the Merly MCP server.
 
+Generate a machine-specific proposal from the repository root:
+
+```powershell
+npm run setup -- --client codex --dry-run
+```
+
+The command prints the detected MCP server path, the expected user-level config path, and the TOML block to add.
+
 Use absolute paths for your checkout:
 
 ```toml
@@ -14,7 +22,7 @@ tool_timeout_sec = 60
 default_tools_approval_mode = "approve"
 ```
 
-The MCP server loads `mcp-server/.env` from its `cwd`, so keep local credentials there instead of putting secrets directly in `config.toml`.
+The MCP server loads credentials from `mcp-server/.env` when started from the MCP server directory or from the server package path. Keep local credentials there instead of putting secrets directly in `config.toml`.
 
 For unauthenticated smoke testing, `merly_auth_status` and `merly_health` work without credentials.
 

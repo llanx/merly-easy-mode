@@ -2,11 +2,11 @@
 
 Lightweight integration layer for using Merly Mentor with AI coding agents.
 
-The goal is to make Merly easy to connect without forcing a specific development workflow. The repo provides one MCP server, setup guidance for Codex, and a path toward the `merly-easy` onboarding CLI.
+The goal is to make Merly easy to connect without forcing a specific development workflow. The repo provides one MCP server, setup guidance for Codex and Claude, and a path toward the `merly-easy` onboarding CLI.
 
 1. Run the local Merly Mentor app.
 2. Start the Merly MCP server.
-3. Connect an AI coding agent such as Codex.
+3. Connect an AI coding agent such as Codex or Claude.
 4. Let the agent read Merly issues, make focused code edits, run validation, and verify the result.
 
 This repository should contain only integration code, documentation, and local development helpers. Do not commit Merly binaries, local runtime state, API keys, logs, user data, or model files.
@@ -16,8 +16,12 @@ This repository should contain only integration code, documentation, and local d
 ```text
 merly-codex-integration/
   QUICKSTART.md
+  agent-packs/
+    claude/
+    codex/
   docs/
     auth-setup.md
+    claude-config-example.md
     codex-config-example.md
     troubleshooting.md
   mcp-server/
@@ -47,8 +51,8 @@ npm run merly -- spec preflight --spec <spec-file> --dry-run
 ## Integration Pieces
 
 - The MCP server exposes typed tools backed by the local Merly Mentor API.
-- The Codex skill describes the repeatable automated-fix workflow.
-- Codex owns local source-code edits and test execution.
+- The Codex and Claude agent packs describe the repeatable automated-fix workflow.
+- The connected AI agent owns local source-code edits and test execution.
 - Merly provides issue discovery, code insight, and post-fix verification.
 
 Start with:
@@ -57,6 +61,8 @@ Start with:
 - [mcp-server/README.md](mcp-server/README.md) for MCP setup and smoke commands.
 - [docs/merly-openapi-summary.md](docs/merly-openapi-summary.md) for the sanitized Merly API subset the MCP server wraps.
 - [docs/codex-config-example.md](docs/codex-config-example.md) for local Codex MCP wiring.
+- [docs/claude-config-example.md](docs/claude-config-example.md) for local Claude MCP wiring.
+- [agent-packs/](agent-packs/) for optional agent instructions and config examples.
 - [docs/auth-setup.md](docs/auth-setup.md) for configuring Merly API credentials.
 - [docs/troubleshooting.md](docs/troubleshooting.md) for common setup issues.
 - [docs/unreal-validation.md](docs/unreal-validation.md) for optional Unreal validation helpers.

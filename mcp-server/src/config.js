@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export function getConfig(env = process.env) {
   loadLocalEnv(env);
@@ -30,7 +31,18 @@ function normalizeBaseUrl(value) {
 }
 
 function loadLocalEnv(env) {
-  const envPath = path.resolve(process.cwd(), ".env");
+  const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+  const envPaths = [
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(sourceDir, "..", ".env"),
+  ];
+
+  for (const envPath of [...new Set(envPaths)]) {
+    loadEnvFile(env, envPath);
+  }
+}
+
+function loadEnvFile(env, envPath) {
   if (!fs.existsSync(envPath)) return;
 
   const content = fs.readFileSync(envPath, "utf8");

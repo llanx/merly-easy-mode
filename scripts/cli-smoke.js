@@ -21,12 +21,14 @@ const cases = [
   {
     name: "codex setup dry-run",
     args: ["setup", "--client", "codex", "--dry-run"],
-    includes: ["Codex Setup (dry run)", "Ask before writing"],
+    env: { MERLY_EASY_CODEX_CONFIG: path.join(repoRoot, ".tmp", "codex.toml") },
+    includes: ["Codex Setup (dry run)", "Agent pack: agent-packs/codex", "[mcp_servers.merly]", "Target config:", "No files were written"],
   },
   {
     name: "claude setup dry-run",
     args: ["setup", "--client", "claude", "--dry-run"],
-    includes: ["Claude Setup (dry run)", "Ask before writing"],
+    env: { MERLY_EASY_CLAUDE_CONFIG: path.join(repoRoot, ".tmp", "claude.json") },
+    includes: ["Claude Setup (dry run)", "Agent pack: agent-packs/claude", "\"mcpServers\"", "\"merly\"", "Target config:", "No files were written"],
   },
   {
     name: "doctor dry-run",

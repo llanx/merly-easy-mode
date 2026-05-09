@@ -1,0 +1,7 @@
+[mcp_servers.merly]
+command = "node"
+args = ["<checkout>/mcp-server/src/server.js"]
+cwd = "<checkout>/mcp-server"
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+default_tools_approval_mode = "approve"

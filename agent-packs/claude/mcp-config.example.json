@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "merly": {
+      "command": "node",
+      "args": ["<checkout>/mcp-server/src/server.js"],
+      "cwd": "<checkout>/mcp-server"
+    }
+  }
+}

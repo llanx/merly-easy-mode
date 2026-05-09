@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const process = require("node:process");
 const { spawnSync } = require("node:child_process");
@@ -81,20 +82,7 @@ function runSetup(argv) {
     throw new CliError(`Unsupported client: ${client}`, 1, "Supported clients: codex, claude.");
   }
 
-  printPlan({
-    title: `${capitalize(client)} Setup`,
-    dryRun: options.dryRun,
-    steps: [
-      "Locate the repository checkout and MCP server entrypoint.",
-      `Generate ${capitalize(client)} MCP configuration using the shared Merly MCP server.`,
-      "Show the target config path and exact proposed content.",
-      "Ask before writing any user-level agent config file.",
-      "Run a lightweight validation command after setup.",
-    ],
-    next: options.dryRun
-      ? "Dry run complete. Agent-pack files and config writers are planned for the agent setup slice."
-      : "Config writing is not implemented in this scaffold. Run with --dry-run today.",
-  });
+  printSetupProposal(buildSetupProposal(client, options), options);
 }
 
 function runDoctor(argv) {
@@ -272,7 +260,7 @@ function printEasyHelp() {
 }
 
 function printSetupHelp() {
-  console.log("Usage: merly-easy setup --client <codex|claude> [--dry-run]");
+  console.log("Usage: merly-easy setup --client <codex|claude> [--target <path>] [--dry-run]");
 }
 
 function printDoctorHelp() {
@@ -304,6 +292,113 @@ function printSpecReportHelp() {
 
 function existsLabel(filePath) {
   return `${fs.existsSync(filePath) ? "found" : "missing"} (${filePath})`;
+}
+
+function buildSetupProposal(client, options) {
+  const repoRoot = path.resolve(__dirname, "..");
+  const mcpServerRoot = path.join(repoRoot, "mcp-server");
+  const serverPath = path.join(mcpServerRoot, "src", "server.js");
+  const agentPack = `agent-packs/${client}`;
+  const targetPath = resolveSetupTarget(client, options);
+
+  if (client === "codex") {
+    return {
+      title: "Codex Setup",
+      client,
+      agentPack,
+      targetPath,
+      serverPath,
+      mcpServerRoot,
+      language: "toml",
+      config: renderCodexConfig({ serverPath, mcpServerRoot }),
+      nextCommand: "codex mcp get merly",
+    };
+  }
+
+  return {
+    title: "Claude Setup",
+    client,
+    agentPack,
+    targetPath,
+    serverPath,
+    mcpServerRoot,
+    language: "json",
+    config: renderClaudeConfig({ serverPath, mcpServerRoot }),
+    nextCommand: "Restart Claude after updating its MCP config, then ask it to call merly_health.",
+  };
+}
+
+function printSetupProposal(proposal, options) {
+  console.log(`${proposal.title}${options.dryRun ? " (dry run)" : ""}`);
+  console.log("");
+  console.log(`Agent pack: ${proposal.agentPack}`);
+  console.log(`MCP server: ${existsLabel(proposal.serverPath)}`);
+  console.log(`MCP working directory: ${existsLabel(proposal.mcpServerRoot)}`);
+  console.log(`Target config: ${proposal.targetPath}`);
+  console.log("");
+  console.log("Proposed config:");
+  console.log(`\`\`\`${proposal.language}`);
+  console.log(proposal.config);
+  console.log("```");
+  console.log("");
+  console.log("No files were written.");
+  console.log("Future interactive setup will ask before writing any user-level agent config file.");
+  console.log(`Validation after setup: ${proposal.nextCommand}`);
+}
+
+function resolveSetupTarget(client, options) {
+  if (options.target) return path.resolve(options.target);
+
+  if (client === "codex") {
+    return path.resolve(process.env.MERLY_EASY_CODEX_CONFIG || path.join(os.homedir(), ".codex", "config.toml"));
+  }
+
+  if (process.env.MERLY_EASY_CLAUDE_CONFIG) {
+    return path.resolve(process.env.MERLY_EASY_CLAUDE_CONFIG);
+  }
+
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+    return path.join(appData, "Claude", "claude_desktop_config.json");
+  }
+
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
+  }
+
+  return path.join(os.homedir(), ".config", "Claude", "claude_desktop_config.json");
+}
+
+function renderCodexConfig({ serverPath, mcpServerRoot }) {
+  return [
+    "[mcp_servers.merly]",
+    `command = ${tomlString("node")}`,
+    `args = [${tomlString(serverPath)}]`,
+    `cwd = ${tomlString(mcpServerRoot)}`,
+    "startup_timeout_sec = 10",
+    "tool_timeout_sec = 60",
+    `default_tools_approval_mode = ${tomlString("approve")}`,
+  ].join("\n");
+}
+
+function renderClaudeConfig({ serverPath, mcpServerRoot }) {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        merly: {
+          command: "node",
+          args: [serverPath],
+          cwd: mcpServerRoot,
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function tomlString(value) {
+  return JSON.stringify(String(value));
 }
 
 function collectDoctorDiagnostics({ dryRun, mock }) {
