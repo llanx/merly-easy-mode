@@ -16,6 +16,8 @@ MERLY_BASE_URL=http://host:port
 
 in `mcp-server/.env`.
 
+Use [merly-install-start.md](merly-install-start.md) for Windows and macOS install/start guidance.
+
 ## CLI Help
 
 The CLI scaffold should run without Merly:

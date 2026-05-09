@@ -23,6 +23,7 @@ merly-codex-integration/
     auth-setup.md
     claude-config-example.md
     codex-config-example.md
+    merly-install-start.md
     troubleshooting.md
   mcp-server/
     README.md
@@ -63,6 +64,7 @@ Start with:
 - [docs/codex-config-example.md](docs/codex-config-example.md) for local Codex MCP wiring.
 - [docs/claude-config-example.md](docs/claude-config-example.md) for local Claude MCP wiring.
 - [agent-packs/](agent-packs/) for optional agent instructions and config examples.
+- [docs/merly-install-start.md](docs/merly-install-start.md) for installing or starting Merly when the local bridge is unavailable.
 - [docs/auth-setup.md](docs/auth-setup.md) for configuring Merly API credentials.
 - [docs/troubleshooting.md](docs/troubleshooting.md) for common setup issues.
 - [docs/unreal-validation.md](docs/unreal-validation.md) for optional Unreal validation helpers.

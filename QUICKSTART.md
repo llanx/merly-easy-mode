@@ -5,7 +5,7 @@ This is the shortest path for using the current Merly Easy Mode repository as an
 ## Prerequisites
 
 - Node.js 20 or newer.
-- A local Merly Mentor install running on the default bridge URL: `http://127.0.0.1:4201`.
+- A local Merly Mentor install running on the default bridge URL: `http://127.0.0.1:4201`. See [docs/merly-install-start.md](docs/merly-install-start.md) if Merly is not installed or running.
 - A Merly API key, bearer token, or DIF-only key for the tools you want to use.
 
 ## Install
@@ -39,6 +39,7 @@ MERLY_DIF_API_KEY=your-dif-key
 From the repository root:
 
 ```powershell
+npm run merly -- doctor
 npm run mcp:smoke
 ```
 

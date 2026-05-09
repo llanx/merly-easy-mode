@@ -16,7 +16,7 @@ const cases = [
   {
     name: "easy dry-run",
     args: ["easy", "--dry-run"],
-    includes: ["Merly Easy Mode (dry run)", "Check Node", "Dry run complete"],
+    includes: ["Merly Easy Mode (dry run)", "Check Node", "official sources", "Dry run complete"],
   },
   {
     name: "codex setup dry-run",
@@ -42,11 +42,32 @@ const cases = [
     includes: ["Merly Doctor", "merly_health: api=ok", "mcp_tool_smoke: tools=23", "Doctor completed without blockers"],
   },
   {
-    name: "doctor missing mock",
-    args: ["doctor"],
+    name: "doctor missing mock windows",
+    args: ["doctor", "--platform", "win32"],
     env: { MERLY_EASY_DOCTOR_MOCK: "missing" },
     status: 1,
-    includes: ["Merly Doctor", "merly_health: Merly Bridge API is not reachable", "Doctor found blockers"],
+    includes: [
+      "Merly Doctor",
+      "merly_health: Merly Bridge API is not reachable",
+      "Doctor found blockers",
+      "Merly Install/Start Guidance",
+      "Official source: https://www.merly.ai/mentor",
+      "Windows Start menu",
+      "Resume with: npm run merly -- doctor",
+    ],
+  },
+  {
+    name: "doctor missing mock macos",
+    args: ["doctor", "--platform", "darwin"],
+    env: { MERLY_EASY_DOCTOR_MOCK: "missing" },
+    status: 1,
+    includes: [
+      "Merly Doctor",
+      "Merly Install/Start Guidance",
+      "macOS",
+      "Applications",
+      "Resume with: npm run merly -- doctor",
+    ],
   },
   {
     name: "auth dry-run",

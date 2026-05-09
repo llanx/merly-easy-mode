@@ -7,6 +7,8 @@ const { spawnSync } = require("node:child_process");
 
 const VERSION = "0.1.0";
 const CLIENTS = new Set(["codex", "claude"]);
+const MERLY_MENTOR_URL = "https://www.merly.ai/mentor";
+const DEFAULT_MERLY_BASE_URL = "http://127.0.0.1:4201";
 
 function main(argv) {
   try {
@@ -60,7 +62,7 @@ function runEasy(argv) {
     steps: [
       "Check Node, platform, Git workspace, and local dependencies.",
       "Check whether the Merly Bridge API is reachable.",
-      "Guide Merly install/start if the bridge is unavailable.",
+      "Guide Merly install/start from official sources if the bridge is unavailable.",
       "Guide API key setup and write credentials only to ignored local env files.",
       "Configure Codex or Claude after showing the proposed config change.",
       "Run MCP smoke checks.",
@@ -92,6 +94,7 @@ function runDoctor(argv) {
   const diagnostics = collectDoctorDiagnostics({
     dryRun: options.dryRun,
     mock: process.env.MERLY_EASY_DOCTOR_MOCK || "",
+    platform: options.platform || process.env.MERLY_EASY_PLATFORM_MOCK || process.platform,
   });
   const failed = diagnostics.checks.filter((check) => check.status === "fail");
   const warned = diagnostics.checks.filter((check) => check.status === "warn");
@@ -242,7 +245,7 @@ function printGlobalHelp() {
 Usage:
   merly-easy easy [--dry-run]
   merly-easy setup --client <codex|claude> [--dry-run]
-  merly-easy doctor [--dry-run]
+  merly-easy doctor [--platform <win32|darwin|linux>] [--dry-run]
   merly-easy auth [--dry-run]
   merly-easy spec <preflight|verify|report> [options]
 
@@ -264,7 +267,7 @@ function printSetupHelp() {
 }
 
 function printDoctorHelp() {
-  console.log("Usage: merly-easy doctor [--dry-run]");
+  console.log("Usage: merly-easy doctor [--platform <win32|darwin|linux>] [--dry-run]");
 }
 
 function printAuthHelp() {
@@ -401,7 +404,7 @@ function tomlString(value) {
   return JSON.stringify(String(value));
 }
 
-function collectDoctorDiagnostics({ dryRun, mock }) {
+function collectDoctorDiagnostics({ dryRun, mock, platform }) {
   const repoRoot = path.resolve(__dirname, "..");
   const mcpServerRoot = path.join(repoRoot, "mcp-server");
   const mcpServerPath = path.join(mcpServerRoot, "src", "server.js");
@@ -434,12 +437,12 @@ function collectDoctorDiagnostics({ dryRun, mock }) {
       status: "skip",
       detail: "Dry run skipped Merly health, auth-status, and MCP smoke checks.",
     });
-    return { repoRoot, dryRun, checks };
+    return { repoRoot, dryRun, platform, checks };
   }
 
   if (mock) {
     checks.push(...mockDoctorChecks(mock));
-    return { repoRoot, dryRun, checks };
+    return { repoRoot, dryRun, platform, checks };
   }
 
   checks.push(
@@ -472,7 +475,7 @@ function collectDoctorDiagnostics({ dryRun, mock }) {
     }),
   );
 
-  return { repoRoot, dryRun, checks };
+  return { repoRoot, dryRun, platform, checks };
 }
 
 function printDoctorReport(diagnostics) {
@@ -489,9 +492,76 @@ function printDoctorReport(diagnostics) {
   console.log("");
   if (failed.length > 0) {
     console.log("Doctor found blockers. Fix failed checks before running Easy Mode.");
+    if (needsMerlyStartGuidance(diagnostics.checks)) {
+      console.log("");
+      printMerlyStartGuidance(diagnostics.platform);
+    }
   } else {
     console.log("Doctor completed without blockers.");
   }
+}
+
+function needsMerlyStartGuidance(checks) {
+  return checks.some((check) => (
+    check.status === "fail" &&
+    (check.name === "merly_health" || check.name === "mcp_tool_smoke") &&
+    /bridge|health|reachable|fetch|connect|ECONN/i.test(check.detail)
+  ));
+}
+
+function printMerlyStartGuidance(platform) {
+  const guidance = buildMerlyStartGuidance(platform);
+  console.log("Merly Install/Start Guidance");
+  console.log(`Official source: ${MERLY_MENTOR_URL}`);
+  console.log(`Bridge health URL: ${DEFAULT_MERLY_BASE_URL}/api/v2/health`);
+  console.log("");
+
+  for (const [index, step] of guidance.steps.entries()) {
+    console.log(`${index + 1}. ${step}`);
+  }
+  console.log("");
+  console.log(`Resume with: ${guidance.resumeCommand}`);
+}
+
+function buildMerlyStartGuidance(platform) {
+  const normalized = normalizePlatform(platform);
+  const commonSteps = [
+    "Install Merly Mentor from the official source if it is not already installed.",
+    "Start the Merly Mentor desktop app or service and wait for the local bridge API to become reachable.",
+  ];
+
+  if (normalized === "win32") {
+    return {
+      steps: [
+        "Use Windows 10 or Windows 11, then install Merly Mentor from the official source.",
+        "If Merly is already installed, start it from the Windows Start menu or the installed application shortcut.",
+        `Open ${DEFAULT_MERLY_BASE_URL}/api/v2/health in a browser and confirm the bridge responds.`,
+        "Keep the Merly app running while Codex or Claude uses the MCP server.",
+      ],
+      resumeCommand: "npm run merly -- doctor",
+    };
+  }
+
+  if (normalized === "darwin") {
+    return {
+      steps: [
+        "Install Merly Mentor for macOS from the official source and follow the current OS requirements listed there.",
+        "If Merly is already installed, open it from Applications and allow it to finish starting its local bridge.",
+        `Open ${DEFAULT_MERLY_BASE_URL}/api/v2/health in a browser and confirm the bridge responds.`,
+        "Keep the Merly app running while Codex or Claude uses the MCP server.",
+      ],
+      resumeCommand: "npm run merly -- doctor",
+    };
+  }
+
+  return {
+    steps: [
+      ...commonSteps,
+      `Open ${DEFAULT_MERLY_BASE_URL}/api/v2/health in a browser and confirm the bridge responds.`,
+      "Keep Merly running while Codex or Claude uses the MCP server.",
+    ],
+    resumeCommand: "npm run merly -- doctor",
+  };
 }
 
 function commandCheck({ name, command, args, cwd, summarize }) {
@@ -607,6 +677,14 @@ function firstUsefulLine(value) {
 
 function toCamelCase(value) {
   return value.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function normalizePlatform(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "macos" || normalized === "mac" || normalized === "darwin") return "darwin";
+  if (normalized === "windows" || normalized === "win" || normalized === "win32") return "win32";
+  if (normalized === "linux") return "linux";
+  return normalized;
 }
 
 function capitalize(value) {
