@@ -1,0 +1,28 @@
+{
+  "name": "merly-mentor-mcp",
+  "version": "0.1.0",
+  "description": "Prototype MCP server that exposes Merly Mentor analysis to Codex.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "merly-mentor-mcp": "./src/server.js"
+  },
+  "scripts": {
+    "start": "node ./src/server.js",
+    "debug": "node ./scripts/merly-debug.js",
+    "auth:smoke": "node ./scripts/merly-debug.js auth-smoke",
+    "dif:smoke": "node ./scripts/merly-debug.js dif-smoke",
+    "open:keys": "node ./scripts/open-ui.js dif-api-keys",
+    "open:sign-in": "node ./scripts/open-ui.js sign-in",
+    "mcp:smoke": "node ./scripts/mcp-smoke.js",
+    "smoke": "node ./scripts/merly-debug.js health",
+    "unreal:automation": "node ./scripts/run-unreal-automation.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
+  }
+}

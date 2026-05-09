@@ -1,0 +1,44 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.token
+
+# Private local workflow artifacts
+.codex-private/
+Specs-private/
+.merly-local/
+
+# Logs and runtime files
+logs/
+*.log
+*.pid
+
+# Merly local install/runtime artifacts
+.mentor/
+.models/
+.UI/
+.assets/
+Merly.ai/
+MerlyInstaller*.exe
+MerlyMentor.exe
+MentorBridge.exe
+MentorUI.zip
+*.build-info.json
+swagger-v2.yaml
+uninstall.cmd
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

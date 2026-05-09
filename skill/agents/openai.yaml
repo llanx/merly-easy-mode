@@ -1,0 +1,13 @@
+interface:
+  display_name: "Merly Mentor"
+  short_description: "Initialize Merly analysis and repair code."
+  default_prompt: "Use $merly-mentor to resolve or initialize this repository in Merly, then find one actionable issue, fix it, run validation, and verify the changed snippet."
+
+policy:
+  allow_implicit_invocation: true
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "merly"
+      description: "Local Merly Mentor MCP server"
