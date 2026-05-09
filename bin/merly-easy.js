@@ -9,6 +9,8 @@ const VERSION = "0.1.0";
 const CLIENTS = new Set(["codex", "claude"]);
 const MERLY_MENTOR_URL = "https://www.merly.ai/mentor";
 const DEFAULT_MERLY_BASE_URL = "http://127.0.0.1:4201";
+const MERLY_UI_KEYS_URL = "http://127.0.0.1:4202/dif-api-keys";
+const AUTH_FLOWS = new Set(["ui", "advanced"]);
 
 function main(argv) {
   try {
@@ -112,17 +114,17 @@ function runAuth(argv) {
   const options = parseOptions(argv);
   if (options.help) return printAuthHelp();
 
-  printPlan({
-    title: "Merly Auth",
-    dryRun: options.dryRun,
-    steps: [
-      "Prefer API-key creation through the local Merly UI.",
-      "Offer advanced login/key creation only after an explicit security warning.",
-      "Store final credentials only in ignored local env files.",
-      "Verify credentials with auth smoke checks.",
-    ],
-    next: "Current auth helpers live under mcp-server: npm run open:keys, npm run auth:smoke, npm run dif:smoke.",
-  });
+  const flow = String(options.flow || options._[0] || "ui").toLowerCase();
+  if (!AUTH_FLOWS.has(flow)) {
+    throw new CliError(`Unsupported auth flow: ${flow}`, 1, "Supported flows: ui, advanced.");
+  }
+
+  const context = buildAuthContext(options);
+  if (flow === "advanced") {
+    return runAdvancedAuth(options, context);
+  }
+
+  return runUiAuth(options, context);
 }
 
 function runSpec(argv) {
@@ -217,6 +219,16 @@ function parseOptions(argv) {
       options.changed = true;
     } else if (arg === "--json") {
       options.json = true;
+    } else if (arg === "--write") {
+      options.write = true;
+    } else if (arg === "--open") {
+      options.open = true;
+    } else if (arg === "--confirm-advanced") {
+      options.confirmAdvanced = true;
+    } else if (arg === "--skip-verify") {
+      options.skipVerify = true;
+    } else if (arg === "--from-env") {
+      options.fromEnv = true;
     } else if (arg.startsWith("--")) {
       const key = toCamelCase(arg.slice(2));
       const next = argv[index + 1];
@@ -246,7 +258,7 @@ Usage:
   merly-easy easy [--dry-run]
   merly-easy setup --client <codex|claude> [--dry-run]
   merly-easy doctor [--platform <win32|darwin|linux>] [--dry-run]
-  merly-easy auth [--dry-run]
+  merly-easy auth [--flow <ui|advanced>] [--write] [--dry-run]
   merly-easy spec <preflight|verify|report> [options]
 
 Commands:
@@ -271,7 +283,14 @@ function printDoctorHelp() {
 }
 
 function printAuthHelp() {
-  console.log("Usage: merly-easy auth [--dry-run]");
+  console.log(`Usage:
+  merly-easy auth [--flow ui] [--from-env|--api-key <key>|--dif-api-key <key>] [--write] [--open] [--target-env <path>] [--dry-run]
+  merly-easy auth --flow advanced --confirm-advanced --write [--key-name <name>] [--target-env <path>] [--dry-run]
+
+Notes:
+  UI flow is preferred. Use --from-env to read MERLY_API_KEY or MERLY_DIF_API_KEY from the current shell.
+  It stores only API keys in ignored local env files.
+  Advanced flow reads MERLY_EMAIL and MERLY_PASSWORD from the current environment only.`);
 }
 
 function printSpecHelp() {
@@ -295,6 +314,549 @@ function printSpecReportHelp() {
 
 function existsLabel(filePath) {
   return `${fs.existsSync(filePath) ? "found" : "missing"} (${filePath})`;
+}
+
+function buildAuthContext(options) {
+  const repoRoot = path.resolve(__dirname, "..");
+  const mcpServerRoot = path.join(repoRoot, "mcp-server");
+  const envPath = resolveAuthEnvPath(options, repoRoot);
+  return {
+    repoRoot,
+    mcpServerRoot,
+    envPath,
+    mock: process.env.MERLY_EASY_AUTH_MOCK || "",
+  };
+}
+
+function runUiAuth(options, context) {
+  const credentials = collectProvidedAuthCredentials(options);
+  printAuthHeader("UI-created API key", options, context);
+  console.log(`Local key page: ${MERLY_UI_KEYS_URL}`);
+  console.log("");
+
+  if (options.dryRun) {
+    console.log("1. Open the local Merly UI and create an API key.");
+    console.log("2. Rerun this command with --api-key or --dif-api-key and --write.");
+    console.log("3. Verify credentials with auth smoke checks.");
+    console.log("");
+    console.log("No files were written.");
+    return;
+  }
+
+  if (options.open) {
+    const opened = openMerlyUi(context.mcpServerRoot, "dif-api-keys");
+    console.log(opened.ok ? `Opened local key page: ${opened.url}` : `Could not open local key page: ${opened.error}`);
+    console.log("");
+  }
+
+  if (credentials.count > 0) {
+    console.log(`Credential input: ${credentials.summary.join(", ")}`);
+    if (options.write) {
+      assertWritableAuthEnvPath(context.envPath, context.repoRoot);
+      writeEnvCredentials(context.envPath, credentials.values);
+      console.log(`Updated ignored env file: ${context.envPath}`);
+    } else {
+      console.log("No files were written. Add --write to store provided keys in the ignored env file.");
+    }
+    console.log("");
+  } else {
+    console.log("No API key was supplied on this command.");
+    console.log("Verification will use existing local env credentials if present.");
+    console.log("Otherwise, create a key in the local Merly UI, set MERLY_API_KEY or MERLY_DIF_API_KEY in the current shell, then rerun with --from-env --write.");
+    console.log("");
+  }
+
+  if (options.skipVerify) {
+    console.log("Verification skipped by --skip-verify.");
+    return;
+  }
+
+  const verification = runAuthVerification({
+    context,
+    envOverrides: credentials.values,
+  });
+  printAuthVerification(verification);
+  if (!verification.ok) process.exitCode = 1;
+}
+
+function runAdvancedAuth(options, context) {
+  printAuthHeader("Advanced login/key creation", options, context);
+  printAdvancedAuthWarning();
+
+  if (options.dryRun) {
+    console.log("1. Confirm Merly is running and reachable.");
+    console.log("2. Set MERLY_EMAIL and MERLY_PASSWORD in the current shell only.");
+    console.log("3. Rerun with --confirm-advanced --write to create and store a final API key.");
+    console.log("4. Clear temporary account credentials and rotate or change the password after use.");
+    console.log("");
+    console.log("No files were written. No account credentials were read.");
+    return;
+  }
+
+  if (!options.confirmAdvanced) {
+    throw new CliError(
+      "Advanced auth requires --confirm-advanced.",
+      1,
+      "Prefer `merly-easy auth --flow ui`. If you continue, set MERLY_EMAIL and MERLY_PASSWORD in the current shell only.",
+    );
+  }
+
+  if (!options.write) {
+    throw new CliError(
+      "Advanced auth requires --write because the created API key is never printed.",
+      1,
+      "Use --write to store only the final API key in the ignored env file.",
+    );
+  }
+
+  const email = process.env.MERLY_EMAIL || "";
+  const password = process.env.MERLY_PASSWORD || "";
+  if (!email || !password) {
+    console.log("Blocked: MERLY_EMAIL and MERLY_PASSWORD must be set in the current shell for advanced auth.");
+    console.log("No files were written.");
+    process.exitCode = 1;
+    return;
+  }
+
+  assertWritableAuthEnvPath(context.envPath, context.repoRoot);
+  const created = createApiKeyViaAdvancedAuth({
+    context,
+    email,
+    password,
+    keyName: options.keyName || "Merly Easy Mode",
+  });
+
+  if (!created.ok) {
+    console.log(`Blocked: ${created.error}`);
+    console.log("No files were written.");
+    process.exitCode = 1;
+    return;
+  }
+
+  writeEnvCredentials(
+    context.envPath,
+    { MERLY_API_KEY: created.apiKey },
+    ["MERLY_BEARER_TOKEN", "MERLY_EMAIL", "MERLY_PASSWORD"],
+  );
+  console.log(`Created API key: ${maskSecret(created.apiKey)}`);
+  console.log(`Updated ignored env file: ${context.envPath}`);
+  console.log("Temporary account credentials were not written. Clear MERLY_EMAIL and MERLY_PASSWORD from the current shell.");
+  console.log("Recommended next step: rotate or change the password used for the advanced flow.");
+  console.log("");
+
+  if (options.skipVerify) {
+    console.log("Verification skipped by --skip-verify.");
+    return;
+  }
+
+  const verification = runAuthVerification({
+    context,
+    envOverrides: { MERLY_API_KEY: created.apiKey },
+  });
+  printAuthVerification(verification);
+  if (!verification.ok) process.exitCode = 1;
+}
+
+function printAuthHeader(flowName, options, context) {
+  console.log(`Merly Auth${options.dryRun ? " (dry run)" : ""}`);
+  console.log("");
+  console.log(`Flow: ${flowName}`);
+  console.log(`Target env file: ${context.envPath}`);
+  console.log("Credentials are never printed.");
+  console.log("");
+}
+
+function printAdvancedAuthWarning() {
+  console.log("Security warning:");
+  console.log("- Prefer creating an API key in the Merly UI whenever possible.");
+  console.log("- Advanced auth reads MERLY_EMAIL and MERLY_PASSWORD from the current shell only.");
+  console.log("- Login tokens are not printed and are not written to disk.");
+  console.log("- Only the final API key is stored, and only after --write is supplied.");
+  console.log("- Rotate or change the password after using this flow.");
+  console.log("");
+}
+
+function collectProvidedAuthCredentials(options) {
+  const values = {};
+  const summary = [];
+
+  if (options.fromEnv) {
+    if (process.env.MERLY_API_KEY) {
+      values.MERLY_API_KEY = process.env.MERLY_API_KEY;
+      summary.push(`MERLY_API_KEY ${maskSecret(process.env.MERLY_API_KEY)}`);
+    }
+    if (process.env.MERLY_DIF_API_KEY) {
+      values.MERLY_DIF_API_KEY = process.env.MERLY_DIF_API_KEY;
+      summary.push(`MERLY_DIF_API_KEY ${maskSecret(process.env.MERLY_DIF_API_KEY)}`);
+    }
+  }
+
+  if (options.apiKey) {
+    values.MERLY_API_KEY = String(options.apiKey);
+    summary.push(`MERLY_API_KEY ${maskSecret(options.apiKey)}`);
+  }
+
+  if (options.difApiKey) {
+    values.MERLY_DIF_API_KEY = String(options.difApiKey);
+    summary.push(`MERLY_DIF_API_KEY ${maskSecret(options.difApiKey)}`);
+  }
+
+  return {
+    values,
+    summary,
+    count: Object.keys(values).length,
+  };
+}
+
+function resolveAuthEnvPath(options, repoRoot) {
+  const selected = options.targetEnv || process.env.MERLY_EASY_AUTH_ENV_FILE;
+  if (selected) return path.resolve(selected);
+  return path.join(repoRoot, "mcp-server", ".env");
+}
+
+function assertWritableAuthEnvPath(envPath, repoRoot) {
+  const resolved = path.resolve(envPath);
+  const allowedPaths = [
+    path.join(repoRoot, "mcp-server", ".env"),
+  ].map((entry) => path.resolve(entry));
+  const localDir = path.resolve(repoRoot, ".merly-local");
+
+  if (allowedPaths.includes(resolved) || isPathInside(resolved, localDir)) return;
+
+  throw new CliError(
+    `Refusing to write credentials outside ignored local env paths: ${resolved}`,
+    1,
+    "Use the default mcp-server/.env target or an ignored .merly-local path for tests.",
+  );
+}
+
+function writeEnvCredentials(envPath, updates, removeKeys = []) {
+  for (const [key, value] of Object.entries(updates)) {
+    if (/[\r\n]/.test(String(value))) {
+      throw new CliError(`Refusing to write multiline value for ${key}.`);
+    }
+  }
+
+  const directory = path.dirname(envPath);
+  fs.mkdirSync(directory, { recursive: true });
+
+  const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8").split(/\r?\n/) : [];
+  const updateKeys = new Set(Object.keys(updates));
+  const removeKeySet = new Set(removeKeys);
+  const seen = new Set();
+  const lines = [];
+
+  for (const line of existing) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (!match) {
+      if (line !== "" || lines.length > 0) lines.push(line);
+      continue;
+    }
+
+    const key = match[1];
+    if (removeKeySet.has(key)) {
+      seen.add(key);
+      continue;
+    }
+
+    if (updateKeys.has(key)) {
+      lines.push(`${key}=${updates[key]}`);
+      seen.add(key);
+    } else {
+      lines.push(line);
+    }
+  }
+
+  if (lines.length === 0) {
+    lines.push(`MERLY_BASE_URL=${DEFAULT_MERLY_BASE_URL}`);
+  }
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (!seen.has(key)) {
+      lines.push(`${key}=${value}`);
+    }
+  }
+
+  fs.writeFileSync(envPath, `${trimTrailingBlankLines(lines).join("\n")}\n`, "utf8");
+}
+
+function runAuthVerification({ context, envOverrides = {} }) {
+  if (context.mock) {
+    return mockAuthVerification(context.mock, envOverrides);
+  }
+
+  const authStatus = runJsonCommand({
+    command: process.execPath,
+    args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "auth-status"],
+    cwd: context.mcpServerRoot,
+    env: buildAuthCommandEnv(context, envOverrides),
+  });
+
+  if (!authStatus.ok) {
+    return {
+      ok: false,
+      checks: [{ status: "fail", name: "auth_status", detail: authStatus.error }],
+    };
+  }
+
+  const checks = [
+    { status: "pass", name: "auth_status", detail: summarizeAuthStatus(authStatus.payload) },
+  ];
+
+  if (authStatus.payload?.has_mentor_credentials) {
+    const smoke = runJsonCommand({
+      command: process.execPath,
+      args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "auth-smoke", "1"],
+      cwd: context.mcpServerRoot,
+      env: buildAuthCommandEnv(context, envOverrides),
+    });
+    checks.push(smoke.ok
+      ? { status: "pass", name: "auth_smoke", detail: summarizeAuthSmoke(smoke.payload) }
+      : { status: "fail", name: "auth_smoke", detail: smoke.error });
+  } else if (authStatus.payload?.has_dif_credentials) {
+    const smoke = runJsonCommand({
+      command: process.execPath,
+      args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "dif-smoke", "c", "int main(){return 0;}"],
+      cwd: context.mcpServerRoot,
+      env: buildAuthCommandEnv(context, envOverrides),
+    });
+    checks.push(smoke.ok
+      ? { status: "pass", name: "dif_smoke", detail: summarizeDifSmoke(smoke.payload) }
+      : { status: "fail", name: "dif_smoke", detail: smoke.error });
+  } else {
+    checks.push({
+      status: "fail",
+      name: "credentials",
+      detail: "No Merly API credentials are available yet.",
+    });
+  }
+
+  return {
+    ok: checks.every((check) => check.status !== "fail"),
+    checks,
+  };
+}
+
+function printAuthVerification(verification) {
+  console.log("Verification:");
+  for (const check of verification.checks) {
+    console.log(`${statusIcon(check.status)} ${check.name}: ${check.detail}`);
+  }
+  console.log("");
+  console.log(verification.ok ? "Auth setup completed without blockers." : "Auth setup has blockers.");
+}
+
+function createApiKeyViaAdvancedAuth({ context, email, password, keyName }) {
+  if (context.mock) {
+    if (context.mock === "advanced-ready") {
+      return { ok: true, apiKey: "mock-created-api-key-value" };
+    }
+    return { ok: false, error: `Auth mock did not create an API key: ${context.mock}` };
+  }
+
+  const login = runJsonCommand({
+    command: process.execPath,
+    args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "login"],
+    cwd: context.mcpServerRoot,
+    env: {
+      ...buildAuthCommandEnv(context),
+      MERLY_EMAIL: email,
+      MERLY_PASSWORD: password,
+    },
+    redactions: [email, password],
+  });
+
+  if (!login.ok) return { ok: false, error: `login failed: ${login.error}` };
+
+  const accessToken = extractSecretField(login.payload, ["access_token", "accessToken", "token", "jwt", "access"]);
+  if (!accessToken) {
+    return { ok: false, error: "login succeeded, but no access token was returned." };
+  }
+
+  const created = runJsonCommand({
+    command: process.execPath,
+    args: [path.join(context.mcpServerRoot, "scripts", "merly-debug.js"), "create-api-key", keyName],
+    cwd: context.mcpServerRoot,
+    env: {
+      ...buildAuthCommandEnv(context),
+      MERLY_SKIP_LOCAL_ENV: "1",
+      MERLY_BEARER_TOKEN: accessToken,
+      MERLY_API_KEY: "",
+      MERLY_DIF_API_KEY: "",
+    },
+    redactions: [email, password, accessToken],
+  });
+
+  if (!created.ok) return { ok: false, error: `API key creation failed: ${created.error}` };
+
+  const apiKey = extractSecretField(created.payload, ["api_key", "apiKey", "key", "token", "secret", "value"]);
+  if (!apiKey) {
+    return { ok: false, error: "API key creation succeeded, but no API key field was returned." };
+  }
+
+  return { ok: true, apiKey };
+}
+
+function buildAuthCommandEnv(context, overrides = {}) {
+  return {
+    ...process.env,
+    MERLY_BASE_URL: process.env.MERLY_BASE_URL || readEnvValue(context.envPath, "MERLY_BASE_URL") || DEFAULT_MERLY_BASE_URL,
+    ...overrides,
+  };
+}
+
+function runJsonCommand({ command, args, cwd, env, redactions = [] }) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    env,
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      error: sanitizeSecretText(firstUsefulLine(result.stderr || result.stdout) || `Exited with status ${result.status}.`, redactions),
+    };
+  }
+
+  try {
+    return { ok: true, payload: JSON.parse(result.stdout) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Command succeeded, but JSON output could not be parsed: ${sanitizeSecretText(error.message, redactions)}`,
+    };
+  }
+}
+
+function mockAuthVerification(mock, envOverrides) {
+  if (mock === "missing") {
+    return {
+      ok: false,
+      checks: [
+        { status: "pass", name: "auth_status", detail: `base_url=${DEFAULT_MERLY_BASE_URL}; mentor=none; dif=none` },
+        { status: "fail", name: "credentials", detail: "No Merly API credentials are available yet." },
+      ],
+    };
+  }
+
+  const hasMentor = Boolean(envOverrides.MERLY_API_KEY);
+  const hasDif = Boolean(envOverrides.MERLY_DIF_API_KEY || envOverrides.MERLY_API_KEY);
+  const checks = [
+    {
+      status: "pass",
+      name: "auth_status",
+      detail: `base_url=${DEFAULT_MERLY_BASE_URL}; mentor=${hasMentor ? "api_key" : "none"}; dif=${hasDif ? (envOverrides.MERLY_DIF_API_KEY ? "dif_api_key" : "api_key") : "none"}`,
+    },
+  ];
+
+  if (hasMentor) {
+    checks.push({ status: "pass", name: "auth_smoke", detail: "identity=ok; repositories=checked" });
+  } else if (hasDif) {
+    checks.push({ status: "pass", name: "dif_smoke", detail: "verify=ok" });
+  } else {
+    checks.push({ status: "fail", name: "credentials", detail: "No Merly API credentials are available yet." });
+  }
+
+  return {
+    ok: checks.every((check) => check.status !== "fail"),
+    checks,
+  };
+}
+
+function openMerlyUi(mcpServerRoot, page) {
+  const result = spawnSync(process.execPath, [path.join(mcpServerRoot, "scripts", "open-ui.js"), page], {
+    cwd: mcpServerRoot,
+    encoding: "utf8",
+    env: process.env,
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    return { ok: false, error: firstUsefulLine(result.stderr || result.stdout) || `Exited with status ${result.status}.` };
+  }
+
+  return { ok: true, url: firstUsefulLine(result.stdout) || MERLY_UI_KEYS_URL };
+}
+
+function summarizeAuthSmoke(payload) {
+  const repositories = Array.isArray(payload?.repositories?.data)
+    ? `${payload.repositories.data.length} repository record(s)`
+    : "checked";
+  return `identity=${payload?.identity ? "ok" : "unknown"}; repositories=${repositories}`;
+}
+
+function summarizeDifSmoke(payload) {
+  return `verify=${payload?.verify ? "ok" : "unknown"}`;
+}
+
+function readEnvValue(envPath, key) {
+  if (!fs.existsSync(envPath)) return "";
+  const content = fs.readFileSync(envPath, "utf8");
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const equalsIndex = line.indexOf("=");
+    if (equalsIndex <= 0) continue;
+    if (line.slice(0, equalsIndex).trim() === key) {
+      return unquoteEnvValue(line.slice(equalsIndex + 1).trim());
+    }
+  }
+  return "";
+}
+
+function extractSecretField(value, fieldNames) {
+  if (!value || typeof value !== "object") return "";
+  for (const fieldName of fieldNames) {
+    const direct = value[fieldName];
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+  }
+
+  for (const child of Object.values(value)) {
+    if (child && typeof child === "object") {
+      const nested = extractSecretField(child, fieldNames);
+      if (nested) return nested;
+    }
+  }
+
+  return "";
+}
+
+function maskSecret(value) {
+  const text = String(value || "");
+  return `<redacted:${text.length}>`;
+}
+
+function sanitizeSecretText(value, redactions) {
+  let text = String(value || "");
+  for (const secret of redactions) {
+    if (secret) text = text.split(String(secret)).join("<redacted>");
+  }
+  return text;
+}
+
+function trimTrailingBlankLines(lines) {
+  const trimmed = [...lines];
+  while (trimmed.length > 0 && trimmed[trimmed.length - 1] === "") {
+    trimmed.pop();
+  }
+  return trimmed;
+}
+
+function unquoteEnvValue(value) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function isPathInside(candidate, parent) {
+  const relative = path.relative(parent, candidate);
+  return relative === "" || (relative && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function buildSetupProposal(client, options) {

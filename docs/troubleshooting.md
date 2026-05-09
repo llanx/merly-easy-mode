@@ -41,6 +41,14 @@ MERLY_DIF_API_KEY
 
 Use [auth-setup.md](auth-setup.md) for setup paths.
 
+The preferred CLI path is:
+
+```powershell
+$env:MERLY_API_KEY = "<returned-key>"
+npm run merly -- auth --flow ui --from-env --write
+Remove-Item Env:\MERLY_API_KEY
+```
+
 ## PowerShell Blocks npm
 
 If PowerShell blocks `npm.ps1`, use:

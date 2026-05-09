@@ -37,7 +37,25 @@ From `mcp-server/`, you can open that page with:
 npm run open:keys
 ```
 
-Copy the returned key into `mcp-server/.env`:
+From the repository root, Merly Easy Mode can store the key in the ignored `mcp-server/.env` file and verify it without printing the key.
+
+On PowerShell:
+
+```powershell
+$env:MERLY_API_KEY = "<returned-key>"
+npm run merly -- auth --flow ui --from-env --write
+Remove-Item Env:\MERLY_API_KEY
+```
+
+For DIF-only verification:
+
+```powershell
+$env:MERLY_DIF_API_KEY = "<returned-key>"
+npm run merly -- auth --flow ui --from-env --write
+Remove-Item Env:\MERLY_DIF_API_KEY
+```
+
+If you prefer to edit the file yourself, copy the returned key into `mcp-server/.env`:
 
 ```text
 MERLY_API_KEY=returned-key
@@ -52,6 +70,7 @@ MERLY_DIF_API_KEY=returned-key
 Then verify:
 
 ```powershell
+npm run merly -- auth
 npm run debug -- auth-status
 npm run auth:smoke
 ```
@@ -68,43 +87,35 @@ Use this only when you understand the tradeoff of letting a local automation flo
 
 Do not put account credentials in tracked files. If you use temporary values, clear them immediately after creating the API key.
 
-From `mcp-server/`, set local environment variables for the current shell or place temporary values in ignored `mcp-server/.env`:
-
-```text
-MERLY_EMAIL=you@example.com
-MERLY_PASSWORD=your-password
-```
-
-Run:
+From the repository root, run a dry run first:
 
 ```powershell
-npm run debug -- login
+npm run merly -- auth --flow advanced --dry-run
 ```
 
-Use the returned access token as a bearer token, then create an API key:
+Set local environment variables for the current shell. Do not put these values in tracked files:
 
 ```powershell
-$env:MERLY_BEARER_TOKEN = "access-token-from-login"
-npm run debug -- create-api-key "Merly Easy Mode"
+$env:MERLY_EMAIL = "you@example.com"
+$env:MERLY_PASSWORD = "<password>"
 ```
 
-Store only the returned API key for ongoing MCP use:
+Then create and store the final API key:
 
-```text
-MERLY_API_KEY=returned-key
-MERLY_BEARER_TOKEN=
-MERLY_EMAIL=
-MERLY_PASSWORD=
+```powershell
+npm run merly -- auth --flow advanced --confirm-advanced --write
+Remove-Item Env:\MERLY_EMAIL
+Remove-Item Env:\MERLY_PASSWORD
 ```
 
 Then verify:
 
 ```powershell
-npm run auth:smoke
-npm run debug -- me
-npm run debug -- repos
+npm run merly -- auth
 ```
 
-After using the advanced path, consider rotating or changing the password you provided to the automation flow.
+The advanced flow does not print login tokens or the created API key. It writes only the final API key to the ignored env file and removes temporary account credential fields if they are present in that file.
+
+After using the advanced path, rotate or change the password you provided to the automation flow.
 
 Do not commit `.env`, tokens, API keys, passwords, or command output containing credentials.

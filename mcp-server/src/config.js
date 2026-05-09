@@ -31,6 +31,8 @@ function normalizeBaseUrl(value) {
 }
 
 function loadLocalEnv(env) {
+  if (env.MERLY_SKIP_LOCAL_ENV === "1") return;
+
   const sourceDir = path.dirname(fileURLToPath(import.meta.url));
   const envPaths = [
     path.resolve(process.cwd(), ".env"),

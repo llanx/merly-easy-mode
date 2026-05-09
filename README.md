@@ -46,6 +46,7 @@ npm run easy -- --dry-run
 npm run setup -- --client codex --dry-run
 npm run setup -- --client claude --dry-run
 npm run merly -- doctor
+npm run merly -- auth --flow ui --dry-run
 npm run merly -- spec preflight --spec <spec-file> --dry-run
 ```
 

@@ -34,6 +34,14 @@ MERLY_API_KEY=your-key
 MERLY_DIF_API_KEY=your-dif-key
 ```
 
+Or let the root CLI write a UI-created key to the ignored env file:
+
+```powershell
+$env:MERLY_API_KEY = "<returned-key>"
+npm run merly -- auth --flow ui --from-env --write
+Remove-Item Env:\MERLY_API_KEY
+```
+
 ## Smoke Test
 
 From the repository root:
