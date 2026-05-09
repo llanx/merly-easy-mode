@@ -49,8 +49,6 @@ Merly Easy Mode should support:
 - Treat Merly findings as analysis evidence, not automatic proof that a change should be made.
 - Prefer small, validated repairs and snapshot-specific comparison when claiming a Merly issue was resolved.
 
-## First Useful Agent Prompt
+## Agent-Assisted First Run
 
-```text
-Use Merly to inspect this repository, choose one safe issue, fix it, run validation, and verify the change.
-```
+Root `AGENTS.md` and `CLAUDE.md` files tell the agent to run `merly-easy bootstrap status` at session start. If setup is incomplete, the agent should offer to walk the user through Easy Mode, credential setup, MCP config apply, smoke validation, and the first Merly-guided repair flow.
