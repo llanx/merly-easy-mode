@@ -1,19 +1,21 @@
 # Merly Auth Setup
 
-Protected Merly API endpoints require either:
+Protected Merly API endpoints require one of:
 
 ```text
 MERLY_API_KEY
 MERLY_BEARER_TOKEN
 ```
 
-`merly_health` works without credentials. Repository and issue tools require full Mentor credentials. DIF verification can use a DIF-only key:
+DIF verification can also use:
 
 ```text
 MERLY_DIF_API_KEY
 ```
 
-A Merly license key is not the same thing as an API key. Keep license-shaped values in:
+`merly_health` works without credentials. Repository, issue, and re-analysis tools require full Mentor credentials.
+
+A Merly license key is not the same thing as an API credential. If you keep a license value locally, store it separately:
 
 ```text
 MERLY_LICENSE_KEY
@@ -21,22 +23,27 @@ MERLY_LICENSE_KEY
 
 The MCP server does not send `MERLY_LICENSE_KEY` to API v2 endpoints.
 
-## Fast Path: Create A DIF Key In The UI
+## Default Path: Create A Key In The UI
 
-The installed UI includes a DIF API key page:
+Open the local Merly UI and create an API key from the account/API-key area. For DIF-only usage, the local key page is:
 
 ```text
 http://127.0.0.1:4202/dif-api-keys
 ```
 
-Open it from the project:
+From `mcp-server/`, you can open that page with:
 
 ```powershell
-cd C:\Users\matts\merly\merly-codex-integration\mcp-server
 npm run open:keys
 ```
 
-Sign in, create a key, copy the raw key, and put it in `.env`:
+Copy the returned key into `mcp-server/.env`:
+
+```text
+MERLY_API_KEY=returned-key
+```
+
+or, for DIF-only verification:
 
 ```text
 MERLY_DIF_API_KEY=returned-key
@@ -46,107 +53,48 @@ Then verify:
 
 ```powershell
 npm run debug -- auth-status
+npm run auth:smoke
+```
+
+For DIF-only credentials:
+
+```powershell
 npm run dif:smoke
 ```
 
-This unlocks `merly_verify_snippet`. It may not unlock repository and issue endpoints.
+## Advanced Path: Login And Create A Key
 
-Expected successful auth status:
+Use this only when you understand the tradeoff of letting a local automation flow handle your Merly account credentials. Prefer the UI-created key path when possible.
 
-```json
-{
-  "has_mentor_credentials": false,
-  "has_dif_credentials": true,
-  "mentor_auth_mode": "none",
-  "dif_auth_mode": "dif_api_key"
-}
-```
+Do not put account credentials in tracked files. If you use temporary values, clear them immediately after creating the API key.
 
-## Option A: Use An Existing API Key
-
-Create a local `.env` file:
-
-```powershell
-cd C:\Users\matts\merly\merly-codex-integration\mcp-server
-Copy-Item .env.example .env
-notepad .env
-```
-
-Set:
-
-```text
-MERLY_API_KEY=your-key
-```
-
-Then verify:
-
-```powershell
-npm run debug -- auth-status
-npm run auth:smoke
-npm run debug -- me
-npm run debug -- repos
-```
-
-## Option B: Log In And Use A Bearer Token
-
-Use Merly credentials to obtain a short-lived bearer token:
-
-```powershell
-cd C:\Users\matts\merly\merly-codex-integration\mcp-server
-notepad .env
-```
-
-Set:
+From `mcp-server/`, set local environment variables for the current shell or place temporary values in ignored `mcp-server/.env`:
 
 ```text
 MERLY_EMAIL=you@example.com
 MERLY_PASSWORD=your-password
 ```
 
-Then run:
+Run:
 
 ```powershell
 npm run debug -- login
 ```
 
-The login response contains:
-
-```text
-access_token
-refresh_token
-expires_in
-```
-
-Set the access token for the current session:
-
-```text
-MERLY_BEARER_TOKEN=access-token-from-login
-```
-
-Then verify:
-
-```powershell
-npm run debug -- auth-status
-npm run debug -- me
-npm run debug -- repos
-```
-
-If your account uses Google or GitHub sign-in, browser login does not automatically authenticate the MCP server. The local UI may not expose a full Mentor API-key page even though `/api/v2/me/api-keys` exists in the OpenAPI spec. In that case, use a Merly password only for one-time CLI login/API-key creation, then clear `MERLY_EMAIL`, `MERLY_PASSWORD`, and `MERLY_BEARER_TOKEN` from `.env`.
-
-## Option C: Create An API Key After Login
-
-After setting `MERLY_BEARER_TOKEN`, create an API key:
+Use the returned access token as a bearer token, then create an API key:
 
 ```powershell
 $env:MERLY_BEARER_TOKEN = "access-token-from-login"
-npm run debug -- create-api-key "Codex MCP Prototype"
+npm run debug -- create-api-key "Merly Easy Mode"
 ```
 
-The raw key is returned once. Set it for MCP use:
+Store only the returned API key for ongoing MCP use:
 
 ```text
 MERLY_API_KEY=returned-key
 MERLY_BEARER_TOKEN=
+MERLY_EMAIL=
+MERLY_PASSWORD=
 ```
 
 Then verify:
@@ -157,4 +105,6 @@ npm run debug -- me
 npm run debug -- repos
 ```
 
-Do not commit `.env`, tokens, API keys, or command output containing credentials.
+After using the advanced path, consider rotating or changing the password you provided to the automation flow.
+
+Do not commit `.env`, tokens, API keys, passwords, or command output containing credentials.

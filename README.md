@@ -2,7 +2,7 @@
 
 Lightweight integration layer for using Merly Mentor with AI coding agents.
 
-The goal is to make Merly easy to connect without forcing a specific development workflow:
+The goal is to make Merly easy to connect without forcing a specific development workflow. The repo provides one MCP server, setup guidance for Codex, and a path toward the `merly-easy` onboarding CLI.
 
 1. Run the local Merly Mentor app.
 2. Start the Merly MCP server.
@@ -15,19 +15,24 @@ This repository should contain only integration code, documentation, and local d
 
 ```text
 merly-codex-integration/
+  QUICKSTART.md
   docs/
-    engineering-plan.md
     auth-setup.md
     codex-config-example.md
+    troubleshooting.md
   mcp-server/
     README.md
   skill/
     README.md
 ```
 
-## Integration Pieces
+## Modes
 
-Use both a Codex skill and an MCP server:
+- **Adapter Mode:** for users who already have Merly running and want to wire an AI coding agent to the MCP server.
+- **Easy Mode:** the planned guided path for first-time users to install/start Merly, configure credentials, connect an agent, and reach a first useful Merly prompt.
+- **Spec Hooks:** planned optional commands for teams that want Merly evidence in their own specification-driven process.
+
+## Integration Pieces
 
 - The MCP server exposes typed tools backed by the local Merly Mentor API.
 - The Codex skill describes the repeatable automated-fix workflow.
@@ -36,11 +41,13 @@ Use both a Codex skill and an MCP server:
 
 Start with:
 
+- [QUICKSTART.md](QUICKSTART.md) for the shortest clone-to-smoke path.
 - [mcp-server/README.md](mcp-server/README.md) for MCP setup and smoke commands.
-- [docs/merly-openapi-summary.md](docs/merly-openapi-summary.md) for the sanitized Merly API subset the MCP server should wrap.
+- [docs/merly-openapi-summary.md](docs/merly-openapi-summary.md) for the sanitized Merly API subset the MCP server wraps.
 - [docs/codex-config-example.md](docs/codex-config-example.md) for local Codex MCP wiring.
 - [docs/auth-setup.md](docs/auth-setup.md) for configuring Merly API credentials.
-- [docs/unreal-validation.md](docs/unreal-validation.md) for optional Unreal validation helpers used by local repair workflows.
+- [docs/troubleshooting.md](docs/troubleshooting.md) for common setup issues.
+- [docs/unreal-validation.md](docs/unreal-validation.md) for optional Unreal validation helpers.
 
 ## Public Repo Checks
 

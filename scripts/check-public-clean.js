@@ -21,6 +21,11 @@ const privateTermPatterns = [
   { name: "fresh-reviewer", regex: /\bfresh-reviewer\b/i },
   { name: "spec-auditor", regex: /\bspec-auditor\b/i },
   { name: "spec-drift-checker", regex: /\bspec-drift-checker\b/i },
+  { name: "local Windows user path", regex: /C:[\\/]+Users[\\/]+/i },
+  { name: "local Unix user path", regex: /\/Users\/[^/\s]+/i },
+  { name: "DwarfIncremental", regex: /\bDwarfIncremental\b/i },
+  { name: "VillageDwarves", regex: /\bVillageDwarves\b/i },
+  { name: "Codex MCP Prototype", regex: /\bCodex MCP Prototype\b/i },
 ];
 
 const { files, source } = getPublicFileList();

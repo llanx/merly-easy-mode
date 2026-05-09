@@ -1,9 +1,9 @@
 # Merly OpenAPI Summary
 
-This is a sanitized implementation reference for the prototype MCP server. It is based on the local Merly Mentor Swagger file at:
+This is a sanitized implementation reference for the MCP server. It is based on the local Merly Mentor Swagger file served by the installed Merly app.
 
 ```text
-C:\Users\matts\merly\swagger-v2.yaml
+http://127.0.0.1:4201/swagger-v2.yaml
 ```
 
 Do not commit the full local Swagger file unless it has been reviewed for local paths, examples, credentials, and other runtime-specific data.
@@ -53,7 +53,7 @@ BearerAuth: Authorization: Bearer <token>
 ApiKeyAuth: X-API-Key: <key>
 ```
 
-Use an API key for the MCP prototype if possible. It is simpler than storing user credentials and refreshing JWTs.
+Use an API key for MCP use if possible. It is simpler than storing user credentials and refreshing JWTs.
 
 Supported auth routes:
 
@@ -64,7 +64,7 @@ Supported auth routes:
 | `POST` | `/api/v2/auth/logout` | Invalidate current session. |
 | `GET` | `/api/v2/me` | Validate current identity using API key or bearer token. |
 | `GET` | `/api/v2/me/api-keys` | List API keys for current identity. |
-| `POST` | `/api/v2/me/api-keys` | Create an API key. Defer for prototype unless needed. |
+| `POST` | `/api/v2/me/api-keys` | Create an API key. |
 
 JWT access tokens expire after 15 minutes according to the spec. For the MCP server, prefer:
 
@@ -115,7 +115,7 @@ sort
 filter
 ```
 
-Use small limits for MCP tools. The first prototype should request only enough data to select a repair target, usually `limit=20` or `limit=50`.
+Use small limits for MCP tools. Request only enough data to select a repair target, usually `limit=20` or `limit=50`.
 
 ## Domain Model
 
@@ -212,7 +212,7 @@ job.job_key
 job.status
 ```
 
-Repository creation is now implemented for analysis-only onboarding of local repos such as `VillageDwarves`.
+Repository creation is implemented for analysis-only onboarding of local and remote Git repositories.
 
 MCP tools:
 
@@ -413,7 +413,14 @@ workspace_path
 avoid_dirty_files
 ```
 
-Use these when a repository contains generated, tool, or already-dirty files. For `VillageDwarves`, the current prototype filter is `include_path_prefixes=Source/VillageDwarves`, `exclude_path_prefixes=Tools/Unreal_mcp`, and `avoid_dirty_files=true` with `workspace_path=C:\Users\matts\VillageDwarves`.
+Use these when a repository contains generated, tool, or already-dirty files. For example, a project can include only application source, exclude generated tool folders, and skip files that already have local edits:
+
+```text
+include_path_prefixes=src
+exclude_path_prefixes=generated
+avoid_dirty_files=true
+workspace_path=<checkout>
+```
 
 Candidate scoring should prefer:
 
@@ -673,7 +680,7 @@ Observed limitation: repository-level re-analysis appears to analyze Merly's con
 
 `merly_prepare_git_visibility` is intentionally conservative. It dry-runs by default, accepts an explicit target file list, blocks unrelated dirty files unless `allow_unrelated_dirty=true`, blocks untracked target files unless `allow_new_files=true`, and only creates a commit when `commit=true`.
 
-`merly_prepare_ref_visibility` bridges the remaining local-git gap before method=`ref` snapshot creation. It is dry-run by default, resolves Merly's local clone from repository metadata such as `${AWD}\.git-root\${ID}`, checks whether the target commit is already resolvable there, and with `fetch=true` runs a narrow fetch from the local workspace branch into Merly's clone. This replaces the prototype-only manual fetch against `Merly\.git-root\repo(...)`.
+`merly_prepare_ref_visibility` bridges the remaining local-git gap before method=`ref` snapshot creation. It is dry-run by default, resolves Merly's local clone from repository metadata, checks whether the target commit is already resolvable there, and with `fetch=true` runs a narrow fetch from the local workspace branch into Merly's clone.
 
 Snapshot-specific comparison uses `GET /api/v2/rbls/{rbl_id}/snapshots/{snapshot_id}/issues` after a snapshot job completes. The runtime may return snapshots in ascending order even when `sort=-id` is requested, so the MCP client sorts returned snapshots locally and prefers a newly observed snapshot id when available. Prefer snapshot-specific `repair_outcome` over the latest issue endpoint when they disagree; the latest endpoint can lag after a successful recheck.
 

@@ -66,7 +66,7 @@ server.registerTool(
     description: "Register a local or remote Git repository with Merly Mentor for analysis.",
     inputSchema: {
       name: z.string().min(1).describe("Repository display name in Merly."),
-      git_url: z.string().min(1).describe("Git URL or local repository path, for example C:\\Users\\matts\\VillageDwarves."),
+      git_url: z.string().min(1).describe("Git URL or local repository path, for example https://github.com/org/repo.git or <checkout>."),
       git_branch: z.string().optional().describe("Initial branch to analyze, for example master or main."),
       git_remote: z.string().optional().describe("Git remote name for legacy/local repository registration. Defaults to origin."),
       description: z.string().optional().describe("Optional repository description."),
@@ -124,7 +124,7 @@ server.registerTool(
       status: z.enum(["open", "acknowledged", "resolved", "ignored"]).optional().default("open"),
       sort: z.string().optional(),
       include_path_prefixes: pathPrefixListSchema.describe(
-        "Only return issues under these normalized path prefixes, for example Source/VillageDwarves.",
+        "Only return issues under these normalized path prefixes, for example src/app.",
       ),
       exclude_path_prefixes: pathPrefixListSchema.describe(
         "Skip issues under these normalized path prefixes, for example Tools/Unreal_mcp.",
@@ -187,7 +187,7 @@ server.registerTool(
       readiness: z.array(z.string()).optional().describe("Allowed auto_fix_readiness values; defaults to candidate only."),
       exclude_issue_ids: z.array(z.string()).optional().describe("Issue ids to exclude from the batch plan."),
       include_path_prefixes: pathPrefixListSchema.describe(
-        "Only consider issues under these normalized path prefixes, for example Source/VillageDwarves.",
+        "Only consider issues under these normalized path prefixes, for example src/app.",
       ),
       exclude_path_prefixes: pathPrefixListSchema.describe(
         "Skip issues under these normalized path prefixes, for example Tools/Unreal_mcp.",

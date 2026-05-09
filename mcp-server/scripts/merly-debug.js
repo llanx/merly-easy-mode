@@ -73,7 +73,7 @@ async function run(name, args) {
       return client.listApiKeys();
     case "create-api-key":
       return client.createApiKey({
-        name: args[0] || "Codex MCP Prototype",
+        name: args[0] || "Merly Easy Mode",
       });
     case "repos":
     case "repositories":

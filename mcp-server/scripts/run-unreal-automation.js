@@ -4,8 +4,8 @@ import path from "node:path";
 import process from "node:process";
 import { spawn, spawnSync } from "node:child_process";
 
-const DEFAULT_PROJECT_PATH = "C:\\Users\\matts\\DwarfIncremental\\DwarfIncremental.uproject";
-const DEFAULT_TEST_FILTER = "DwarfIncremental.GridNav.NavigationSubsystemSmoke";
+const DEFAULT_PROJECT_PATH = "";
+const DEFAULT_TEST_FILTER = "";
 const DEFAULT_TIMEOUT_MS = 20 * 60 * 1000;
 
 try {
@@ -15,8 +15,16 @@ try {
     process.exit(0);
   }
 
-  const projectPath = path.resolve(options.project || process.env.UNREAL_PROJECT_PATH || DEFAULT_PROJECT_PATH);
+  const requestedProjectPath = options.project || process.env.UNREAL_PROJECT_PATH || DEFAULT_PROJECT_PATH;
   const testFilter = options.test || process.env.UNREAL_AUTOMATION_TEST || DEFAULT_TEST_FILTER;
+  if (!requestedProjectPath) {
+    throw new Error("Unreal project path is required. Pass --project or set UNREAL_PROJECT_PATH.");
+  }
+  if (!testFilter) {
+    throw new Error("Unreal automation test filter is required. Pass --test or set UNREAL_AUTOMATION_TEST.");
+  }
+
+  const projectPath = path.resolve(requestedProjectPath);
   const logPath = path.resolve(
     options.log || defaultLogPath(projectPath, testFilter),
   );
@@ -244,10 +252,6 @@ function readEngineAssociation(projectPath) {
 
 function defaultLogPath(projectPath, testFilter) {
   const projectRoot = path.dirname(projectPath);
-  if (testFilter === DEFAULT_TEST_FILTER) {
-    return path.join(projectRoot, "Saved", "Logs", "GridNavigationSubsystemAutomation.log");
-  }
-
   const name = `${sanitizeFileName(testFilter.split(".").at(-1) || "Automation")}.log`;
   return path.join(projectRoot, "Saved", "Logs", name);
 }
@@ -327,7 +331,7 @@ Environment:
   UNREAL_AUTOMATION_TEST   Default automation test filter
   UNREAL_AUTOMATION_TIMEOUT_MS
 
-Default test:
-  ${DEFAULT_TEST_FILTER}
+Required:
+  Pass --project and --test, or set UNREAL_PROJECT_PATH and UNREAL_AUTOMATION_TEST.
 `);
 }

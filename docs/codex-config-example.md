@@ -1,14 +1,14 @@
 # Codex MCP Config Example
 
-Example local Codex config for the Merly Mentor MCP prototype.
+Example local Codex config for the Merly MCP server.
 
-Use the absolute path for your checkout:
+Use absolute paths for your checkout:
 
 ```toml
 [mcp_servers.merly]
 command = "node"
-args = ["C:/Users/matts/merly/merly-codex-integration/mcp-server/src/server.js"]
-cwd = "C:/Users/matts/merly/merly-codex-integration/mcp-server"
+args = ["<checkout>/mcp-server/src/server.js"]
+cwd = "<checkout>/mcp-server"
 startup_timeout_sec = 10
 tool_timeout_sec = 60
 default_tools_approval_mode = "approve"
@@ -37,7 +37,7 @@ After adding the config, verify Codex can see and call the server:
 
 ```powershell
 codex mcp get merly
-codex exec --skip-git-repo-check -C C:\Users\matts\merly\merly-codex-integration "Use the merly MCP server's merly_health tool and report only whether it succeeded."
+codex exec --skip-git-repo-check -C <checkout> "Use the merly MCP server's merly_health tool and report only whether it succeeded."
 ```
 
-Expected result: `codex mcp get merly` shows `default_tools_approval_mode: approve`, and the exec probe reports `Succeeded`.
+Expected result: `codex mcp get merly` shows the server as configured, and the exec probe reports that the Merly health call succeeded.
