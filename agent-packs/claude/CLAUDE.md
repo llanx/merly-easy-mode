@@ -30,7 +30,17 @@ merly_verify_snippet
 merly_verify_file
 ```
 
-## Standard Repair Loop
+## Repair Modes
+
+When the user asks for Merly repair work but does not specify a mode, ask them to choose: single issue, guarded batch, or report-driven campaign.
+
+- **Single issue:** repair one live Merly issue through local validation and Merly verification or re-analysis.
+- **Guarded batch:** plan a small live batch, then validate and verify or re-analyze after each issue before continuing.
+- **Report-driven campaign:** use a report, subsystem, severity, owner, or milestone as planning context; draft a campaign plan and ask before editing any slice.
+
+Prefer live Merly MCP state for current candidates, issue bundles, verification, and re-analysis. Treat exported reports as optional context or handoff evidence, not authoritative current state.
+
+## Single-Issue Repair Loop
 
 1. Check `merly_auth_status` and `merly_health`.
 2. Resolve the current workspace with `merly_resolve_workspace`.
@@ -43,6 +53,24 @@ merly_verify_file
 9. Use repository-level re-analysis only when the user asks for it or when the task requires it.
 10. Report changed files, validation results, Merly evidence, and skipped checks.
 
+## Guarded Batch Loop
+
+Use guarded batch mode only when the user explicitly asks for it:
+
+1. Plan a small live batch with `merly_plan_batch_fixes` when available.
+2. Keep the batch to three issues or fewer unless the user explicitly asks for more.
+3. Repair only the first planned issue.
+4. Validate locally, verify or re-analyze with Merly, and assess whether to continue.
+5. Stop on validation failure, failed or unchanged Merly outcome, needs-review outcome, missing verification, dirty-worktree ambiguity, or any `should_continue_batch: false` result.
+
+Batch mode never means editing multiple issues before validation and Merly verification or re-analysis.
+
+## Report-Driven Campaign
+
+Use report-driven campaign mode when the user wants to work through a larger report, subsystem, severity, owner, milestone, or other slice. Draft a repair campaign plan first and ask before editing any slice.
+
+Reports are planning context rather than current truth. Confirm each issue against live Merly MCP state before editing, then repair it through the single-issue or guarded-batch loop.
+
 Do not register Merly runtime folders, generated build outputs, vendored dependencies, API keys, logs, model files, or installed binaries as target source repositories.
 
-Do not create broad commits for Merly repairs. If Merly needs git visibility, use targeted files only and leave unrelated dirty files untouched unless the user explicitly permits including them.
+Ask before repository registration, Git commits, user-level config writes, or broad edits. Do not create broad commits for Merly repairs. If Merly needs git visibility, use targeted files only and leave unrelated dirty files untouched unless the user explicitly permits including them. Report local validation, Merly evidence, skipped checks, and remaining uncertainty for every repair.

@@ -1,7 +1,7 @@
 interface:
   display_name: "Merly Mentor"
-  short_description: "Initialize Merly analysis and repair code."
-  default_prompt: "Use $merly-mentor to resolve or initialize this repository in Merly, then find one actionable issue, fix it, run validation, and verify the changed snippet."
+  short_description: "Initialize Merly analysis and guide repair workflows."
+  default_prompt: "Use $merly-mentor to resolve or initialize this repository in Merly, ask which repair mode to use if I did not specify one, then use live Merly MCP state for repair and verification."
 
 policy:
   allow_implicit_invocation: true

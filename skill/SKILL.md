@@ -52,7 +52,17 @@ Use this when repository-level Merly analysis or re-analysis is desired and `mer
 
 Do not register Merly runtime folders, generated build outputs, vendored dependencies, API keys, logs, model files, or installed binaries as target source repositories.
 
-## Repair Workflow
+## Repair Modes
+
+When the user asks for Merly repair work but does not specify a mode, ask them to choose: single issue, guarded batch, or report-driven campaign.
+
+- **Single issue:** repair one live Merly issue through local validation and Merly verification or re-analysis.
+- **Guarded batch:** plan a small live batch, then validate and verify or re-analyze after each issue before continuing.
+- **Report-driven campaign:** use a report, subsystem, severity, owner, or milestone as planning context; draft a campaign plan and ask before editing any slice.
+
+Prefer live Merly MCP state for current candidates, issue bundles, verification, and re-analysis. Treat exported reports as optional context or handoff evidence, not authoritative current state.
+
+## Single-Issue Repair Workflow
 
 1. Call `merly_health` and confirm bridge health, API health, and daemon state.
 2. Call `merly_resolve_workspace` with the current repository path and preferred language when known.
@@ -112,12 +122,18 @@ Use batch mode only for small guarded runs:
 
 1. Call `merly_plan_batch_fixes` with `max_batch_size` no greater than 3 unless the user explicitly asks for more. The tool enforces a hard maximum of 5.
 2. Repair only the first planned issue.
-3. Validate locally, commit only the intended files if Merly needs git visibility, reanalyze, and read `repair_outcome`.
+3. Validate locally, ask before committing only the intended files if Merly needs git visibility, reanalyze, and read `repair_outcome`.
 4. Call `merly_assess_batch_progress` with the planned issue ids and completed outcome.
 5. Continue only when `should_continue` is true and `next_issue_id` is set.
 6. Stop immediately on `failed_unchanged`, `needs_review`, `not_checked`, validation failure, dirty-worktree ambiguity, or any outcome with `should_continue_batch: false`.
 
 Batch mode never means editing multiple issues before validation and reanalysis.
+
+## Report-Driven Campaign
+
+Use report-driven campaign mode when the user wants to work through a larger report, subsystem, severity, owner, milestone, or other slice. Draft a repair campaign plan first and ask before editing any slice.
+
+Reports are planning context rather than current truth. Confirm each issue against live Merly MCP state before editing, then repair it through the single-issue or guarded-batch workflow.
 
 ## DIF-Only Workflow
 
@@ -138,5 +154,6 @@ Keep the final report short and concrete:
 - tests or validation run
 - Merly verification result
 - skipped work or blockers
+- remaining uncertainty
 
-Do not commit local Merly runtime data, API keys, logs, model files, or installed binaries.
+Ask before repository registration, Git commits, user-level config writes, or broad edits. Do not commit local Merly runtime data, API keys, logs, model files, or installed binaries.

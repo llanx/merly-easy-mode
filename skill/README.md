@@ -2,15 +2,13 @@
 
 Merly Mentor Codex skill.
 
-The skill describes the repeatable workflow Codex follows when using Merly to guide automated fixes:
+The skill describes the supported repair workflows Codex follows when using Merly to guide automated fixes:
 
-1. Check Merly status.
-2. Resolve the current workspace.
-3. Pull fix candidates.
-4. Edit source code locally.
-5. Run tests.
-6. Verify with Merly.
-7. Report before/after results.
+- Single-issue repair loop.
+- Guarded batch loop.
+- Report-driven campaign planning.
+
+All modes prefer live Merly MCP state for current findings and verification. Exported reports are optional context, not authoritative current state.
 
 The primary skill file is:
 

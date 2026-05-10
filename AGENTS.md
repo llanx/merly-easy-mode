@@ -59,5 +59,18 @@ The setup command backs up an existing config before changing it. If config chan
 - Do not register repositories in Merly unless the user explicitly approves.
 - Do not create Git commits unless the user explicitly asks.
 - Do not commit local runtime state, credentials, logs, model files, or installed binaries.
+- Ask before broad edits that span unrelated files, subsystems, or repair themes.
 - Keep edits focused on public integration code, docs, examples, and tests.
 - Before proposing a public change as complete, run `npm test` and `npm run check:public-clean`. Run `npm run smoke` when Merly is available.
+
+## Merly Repair Modes
+
+When the user asks Codex to repair Merly findings but does not specify a mode, ask them to choose: single issue, guarded batch, or report-driven campaign.
+
+- **Single issue:** repair one live Merly issue through local validation and Merly verification or re-analysis.
+- **Guarded batch:** plan a small live batch, then validate and verify or re-analyze after each issue before continuing.
+- **Report-driven campaign:** use a report, subsystem, severity, owner, or milestone as planning context; draft a campaign plan and ask before editing any slice.
+
+Prefer live Merly MCP state for current candidates, issue bundles, verification, and re-analysis. Treat exported reports as optional context or handoff evidence, not authoritative current state.
+
+For every repair, report local validation, Merly verification or re-analysis evidence, skipped checks, and remaining uncertainty. See [docs/agent-repair-workflows.md](docs/agent-repair-workflows.md).

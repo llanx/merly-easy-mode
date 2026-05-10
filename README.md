@@ -26,6 +26,7 @@ merly-codex-integration/
   docs/
     auth-setup.md
     agent-bootstrap.md
+    agent-repair-workflows.md
     claude-config-example.md
     codex-config-example.md
     merly-install-start.md
@@ -48,7 +49,7 @@ merly-codex-integration/
 ## Modes
 
 - **Adapter Mode:** for users who already have Merly running and want to wire an AI coding agent to the MCP server.
-- **Easy Mode:** the guided path for first-time users to check Merly, verify credentials, connect an agent, and reach a first useful Merly prompt.
+- **Easy Mode:** the guided path for first-time users to check Merly, verify credentials, connect an agent, and reach a first useful Merly repair session.
 - **Spec Hooks:** optional commands for teams that want extracted requirements, advisory Merly evidence, reports, and opt-in CI policy flags.
 
 ## Commands
@@ -74,7 +75,8 @@ npm run release:check
 
 - The MCP server exposes typed tools backed by the local Merly Mentor API.
 - Root `AGENTS.md` and `CLAUDE.md` files let Codex and Claude detect first-run state and offer guided bootstrap.
-- The Codex and Claude agent packs describe the repeatable automated-fix workflow.
+- The Codex and Claude agent packs describe supported repair workflows.
+- Repair workflows support single-issue, guarded-batch, and report-driven campaign modes.
 - The connected AI agent owns local source-code edits and test execution.
 - Merly provides issue discovery, code insight, and post-fix verification.
 
@@ -82,6 +84,7 @@ Start with:
 
 - [QUICKSTART.md](QUICKSTART.md) for the shortest clone-to-smoke path.
 - [docs/agent-bootstrap.md](docs/agent-bootstrap.md) for the agent-assisted first-run flow.
+- [docs/agent-repair-workflows.md](docs/agent-repair-workflows.md) for supported Merly repair modes after setup.
 - [mcp-server/README.md](mcp-server/README.md) for MCP setup and smoke commands.
 - [docs/merly-openapi-summary.md](docs/merly-openapi-summary.md) for the sanitized Merly API subset the MCP server wraps.
 - [docs/codex-config-example.md](docs/codex-config-example.md) for local Codex MCP wiring.
