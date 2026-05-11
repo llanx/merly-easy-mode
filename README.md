@@ -117,7 +117,7 @@ npm run release:check
 ## Project Layout
 
 ```text
-merly-codex-integration/
+merly-easy-mode/
   AGENTS.md                  Codex first-run and repair instructions
   CLAUDE.md                  Claude first-run and repair instructions
   QUICKSTART.md              Shortest clone-to-smoke setup path
