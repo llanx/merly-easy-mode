@@ -2,6 +2,7 @@
   "name": "merly-easy-mode",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Lightweight public integration layer for using Merly Mentor with AI coding agents.",
   "bin": {
     "merly-easy": "./bin/merly-easy.js"

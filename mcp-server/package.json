@@ -4,6 +4,7 @@
   "description": "MCP server that exposes Merly Mentor analysis to AI coding agents.",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "bin": {
     "merly-mentor-mcp": "./src/server.js"
   },

@@ -156,3 +156,7 @@ npm run release:check
 ```
 
 `npm run smoke` and `npm run release:check` expect the local Merly bridge to be running for MCP smoke validation.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
